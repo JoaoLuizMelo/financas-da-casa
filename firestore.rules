@@ -1,0 +1,76 @@
+rules_version = '2';
+
+// Finanças da Casa — regras de acesso.
+// Princípio: cada pessoa só lê e grava o que é dela. Outra pessoa só lê os seus dados
+// se você a incluir em "compartilhaCom" (Conta e compartilhamento → Compartilhar meus dados).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() { return request.auth != null; }
+    function eu() { return request.auth.uid; }
+    function usuario(u) { return get(/databases/$(database)/documents/users/$(u)).data; }
+    function compartilhaComigo(u) { return eu() in usuario(u).get('compartilhaCom', []); }
+    function cartao(c) { return get(/databases/$(database)/documents/cartoes/$(c)).data; }
+    function podeUsarCartao(c) { return cartao(c).dono == eu() || eu() in cartao(c).get('autorizados', []); }
+
+    // Índice e-mail → conta, usado para compartilhar e autorizar cartões.
+    // Só consulta direta por e-mail; ninguém consegue listar os cadastros.
+    match /perfis/{email} {
+      allow get: if logado();
+      allow list: if false;
+      allow create, update: if logado() && request.resource.data.uid == eu()
+                            && email == request.auth.token.email.lower()
+                            && request.resource.data.keys().hasOnly(['uid', 'nome']);
+      allow delete: if logado() && resource.data.uid == eu();
+    }
+
+    // Perfil e dados de cada pessoa (lançamentos e regras de classificação de notas).
+    match /users/{u} {
+      allow read: if logado() && (u == eu() || eu() in resource.data.get('compartilhaCom', []));
+      allow write: if logado() && u == eu();
+
+      match /{sub}/{id} {
+        allow read: if logado() && (u == eu() || compartilhaComigo(u));
+        allow write: if logado() && u == eu();
+      }
+    }
+
+    // Configurações privadas (WhatsApp e chave de aviso): só o próprio dono.
+    match /privado/{u} {
+      allow read, write: if logado() && u == eu();
+    }
+
+    // Cartões: o titular controla; pessoas autorizadas lançam as próprias compras.
+    match /cartoes/{c} {
+      allow read: if logado() && (resource.data.dono == eu()
+                               || eu() in resource.data.get('autorizados', [])
+                               || compartilhaComigo(resource.data.dono));
+      allow create: if logado() && request.resource.data.dono == eu();
+      allow update: if logado() && resource.data.dono == eu() && request.resource.data.dono == eu();
+      allow delete: if logado() && resource.data.dono == eu();
+
+      // Situação de cada fatura (paga ou não): só o titular marca.
+      match /faturas/{mes} {
+        allow read: if logado() && (cartao(c).dono == eu()
+                                 || eu() in cartao(c).get('autorizados', [])
+                                 || compartilhaComigo(cartao(c).dono));
+        allow write: if logado() && cartao(c).dono == eu();
+      }
+    }
+
+    // Compras no cartão: pertencem a quem comprou; o titular do cartão vê todas as do cartão dele.
+    match /compras/{id} {
+      allow read: if logado() && (resource.data.comprador == eu()
+                               || resource.data.dono == eu()
+                               || compartilhaComigo(resource.data.comprador));
+      allow create: if logado() && request.resource.data.comprador == eu()
+                    && podeUsarCartao(request.resource.data.cartao)
+                    && request.resource.data.dono == cartao(request.resource.data.cartao).dono;
+      allow update: if logado() && resource.data.comprador == eu()
+                    && request.resource.data.comprador == eu()
+                    && request.resource.data.cartao == resource.data.cartao
+                    && request.resource.data.dono == resource.data.dono;
+      allow delete: if logado() && (resource.data.comprador == eu() || resource.data.dono == eu());
+    }
+  }
+}

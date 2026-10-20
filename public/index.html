@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Finanças da Casa</title>
+<meta name="theme-color" content="#0f5868">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanças">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== LOGIN ===== -->
+  <div class="auth" id="auth" hidden>
+    <form class="card" id="authForm" autocomplete="on">
+      <h1>Finanças da Casa</h1>
+      <p class="note" id="authSub">Entre com seu e-mail e senha.</p>
+      <label class="f" id="nomeWrap" hidden>Seu nome<input id="aNome" autocomplete="name" maxlength="30"></label>
+      <label class="f">E-mail<input id="aEmail" type="email" autocomplete="email" required></label>
+      <label class="f" id="senhaWrap">Senha<input id="aSenha" type="password" autocomplete="current-password" minlength="6"></label>
+      <p class="err" id="aErr" hidden></p>
+      <button class="btn pri" type="submit" id="aBtn">Entrar</button>
+      <div class="links">
+        <button type="button" class="linkbtn" id="aModo">Criar conta</button>
+        <button type="button" class="linkbtn" id="aEsqueci">Esqueci a senha</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===== APP ===== -->
+  <div id="app" class="view" hidden>
+    <div class="top">
+      <h1>Finanças da Casa</h1>
+      <div class="mes">
+        <button class="ib" id="prev" aria-label="Mês anterior">‹</button>
+        <b id="mesLbl">—</b>
+        <button class="ib" id="next" aria-label="Próximo mês">›</button>
+      </div>
+    </div>
+    <div class="who"><span id="whoName"></span><button class="btn sm" id="ajBtn">Conta e compartilhamento</button></div>
+
+    <section class="panel" id="ajPanel" hidden>
+      <h2>Minha conta</h2>
+      <div class="grid">
+        <label class="f">Nome<input id="pNome" maxlength="30"></label>
+        <div class="f">Cor<div class="swatches" id="pCor"></div></div>
+      </div>
+      <h2 style="margin-top:4px">Compartilhar meus dados</h2>
+      <p class="note">Quem você adicionar aqui passa a ver seus lançamentos e pode montar um balanço conjunto com você. O balanço do casal aparece para os dois quando cada um compartilha com o outro.</p>
+      <div id="shareList"></div>
+      <div class="inline"><input id="shareEmail" type="email" placeholder="E-mail da pessoa"><button class="btn sm" id="shareAdd">Compartilhar</button></div>
+      <div id="sharersInfo" class="note"></div>
+      <h2 style="margin-top:4px">Avisos no WhatsApp</h2>
+      <div class="grid">
+        <label class="f">Seu WhatsApp<input id="cfgWa" inputmode="tel" placeholder="(81) 9 0000-0000" maxlength="20"></label>
+        <label class="f">Avisar com quantos dias<input id="cfgDias" type="number" min="1" max="30" value="5"></label>
+        <label class="f full">Chave do CallMeBot (para aviso automático)<input id="cfgKey" maxlength="20" placeholder="Ex.: 123456" autocomplete="off"></label>
+      </div>
+      <p class="note">Sem a chave, o aviso fica no botão “Enviar lembrete no WhatsApp” do Resumo. Com a chave, ele chega sozinho todo dia de manhã. Veja o passo a passo no LEIAME.</p>
+      <div class="row-end">
+        <div class="bar-actions"><button class="btn pri" id="cfgSalvar">Salvar</button><button class="btn" id="ajFechar">Fechar</button></div>
+        <button class="btn danger" id="sair">Sair da conta</button>
+      </div>
+    </section>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" data-v="resumo" aria-selected="true">Resumo</button>
+      <button role="tab" data-v="lanc" aria-selected="false">Lançamentos</button>
+      <button role="tab" data-v="cartoes" aria-selected="false">Cartões</button>
+    </div>
+
+    <div class="filters">
+      <div class="chips" id="chips" role="group" aria-label="Escolher balanço"></div>
+      <div class="amb" id="amb" role="group" aria-label="Filtrar por âmbito">
+        <button data-a="todos" aria-pressed="true">Tudo</button>
+        <button data-a="pessoal" aria-pressed="false">Pessoal</button>
+        <button data-a="empresa" aria-pressed="false">Empresa</button>
+      </div>
+    </div>
+
+    <!-- RESUMO -->
+    <div class="view" id="v-resumo">
+      <div class="kpis" aria-live="polite">
+        <div class="kpi"><span>Receitas</span><strong id="sRec" class="in">R$ 0,00</strong></div>
+        <div class="kpi"><span>Despesas</span><strong id="sDes" class="out">R$ 0,00</strong></div>
+        <div class="kpi main"><span id="sSalLbl">Saldo do mês</span><strong id="sSal">R$ 0,00</strong></div>
+        <div class="kpi"><span>A pagar</span><strong id="sPen" class="warn">R$ 0,00</strong></div>
+      </div>
+      <section class="card" id="vencSec" hidden>
+        <div class="card-h"><h2>Próximos vencimentos</h2><span class="eyebrow" id="vencJanela"></span></div>
+        <div class="venc" id="vencList"></div>
+        <div class="wa" id="waBox"></div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Como o dinheiro se divide</h2><span class="eyebrow">toque numa fatia</span></div>
+        <div class="donuts"><div class="donut" id="dGrupo"></div><div class="donut" id="dCat"></div><div class="donut" id="dRec"></div></div>
+      </section>
+      <section class="card" id="ambSec" hidden>
+        <h2>Resultado por âmbito</h2>
+        <div class="tbl-wrap"><table><thead><tr><th>Âmbito</th><th class="r">Receitas</th><th class="r">Despesas</th><th class="r">Resultado</th></tr></thead><tbody id="ambBody"></tbody><tfoot id="ambFoot"></tfoot></table></div>
+      </section>
+      <section class="card" id="pesSec" hidden>
+        <h2>Resultado por pessoa</h2>
+        <div class="tbl-wrap"><table><thead><tr><th>Pessoa</th><th class="r">Receitas</th><th class="r">Despesas</th><th class="r">Resultado</th></tr></thead><tbody id="pesBody"></tbody><tfoot id="pesFoot"></tfoot></table></div>
+      </section>
+      <section class="card" id="prestSec" hidden>
+        <h2>Prestadores de serviço</h2>
+        <div class="tbl-wrap"><table><thead><tr><th>Prestador</th><th>Projeto / obra</th><th class="r">Pgtos</th><th class="r">Valor</th><th class="r">Em aberto</th></tr></thead><tbody id="prestBody"></tbody><tfoot id="prestFoot"></tfoot></table></div>
+      </section>
+      <section class="card" id="cliSec" hidden>
+        <h2>Receitas da empresa por cliente</h2>
+        <div class="tbl-wrap"><table><thead><tr><th>Cliente</th><th>Origem</th><th>Projeto / obra</th><th class="r">Valor</th><th class="r">A receber</th></tr></thead><tbody id="cliBody"></tbody><tfoot id="cliFoot"></tfoot></table></div>
+      </section>
+    </div>
+
+    <!-- LANÇAMENTOS -->
+    <div class="view" id="v-lanc" hidden>
+      <div class="bar-actions">
+        <button class="btn pri" id="novo">+ Novo lançamento</button>
+        <button class="btn" id="fotoBtn">Ler nota por foto</button>
+        <input type="file" id="fotoIn" accept="image/*" capture="environment" hidden>
+        <button class="btn" id="csv">Exportar CSV</button>
+      </div>
+      <form class="panel" id="form" hidden autocomplete="off">
+        <div class="row-end">
+          <div class="seg" role="group" aria-label="Tipo">
+            <button type="button" data-t="despesa" aria-pressed="true">Despesa</button>
+            <button type="button" data-t="receita" aria-pressed="false">Receita</button>
+          </div>
+          <span class="note" id="formTit">Novo lançamento</span>
+        </div>
+        <div class="ia" id="iaBox" hidden><img id="iaImg" alt="Foto da nota"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><p id="iaMsg"></p><div class="ocrbar" id="ocrBar" hidden><i></i></div></div></div>
+        <div class="grid">
+          <label class="f full">Categoria<select id="fCat"></select></label>
+          <label class="f">Valor (R$)<input id="fValor" class="valor" inputmode="decimal" placeholder="0,00" required></label>
+          <label class="f"><span id="lblData">Vencimento ou pagamento</span><input id="fData" type="date" required></label>
+          <label class="f full">Descrição<input id="fDesc" maxlength="80" placeholder="Ex.: Almoço — obra Caruaru" required></label>
+          <div class="empbox" id="empBox" hidden>
+            <p>Discriminação da empresa</p>
+            <label class="f full"><span id="lblContra">Prestador de serviço</span><input id="fContra" maxlength="60" list="dlContra" placeholder="Nome ou razão social"></label>
+            <label class="f">Projeto / obra<input id="fProj" maxlength="60" list="dlProj" placeholder="Ex.: Galpão industrial"></label>
+            <label class="f">Nº NF / recibo<input id="fDoc" maxlength="30" placeholder="Ex.: NFS-e 1234"></label>
+          </div>
+          <label class="f" id="repWrap">Repetir por (meses)<input id="fRep" type="number" min="1" max="36" value="1"></label>
+          <label class="check" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="fPago"> <span id="pagoLbl">Já está pago</span></label>
+        </div>
+        <datalist id="dlContra"></datalist><datalist id="dlProj"></datalist>
+        <div class="row-end">
+          <div class="bar-actions"><button class="btn pri" type="submit" id="salvar">Salvar</button><button class="btn" type="button" id="cancelar">Cancelar</button></div>
+          <button class="btn danger" type="button" id="excluir" hidden>Excluir</button>
+        </div>
+      </form>
+      <section class="card">
+        <div class="card-h"><h2>Lançamentos do mês</h2><span class="eyebrow" id="lancCount"></span></div>
+        <div id="lista"></div>
+      </section>
+    </div>
+
+    <!-- CARTÕES -->
+    <div class="view" id="v-cartoes" hidden>
+      <div class="bar-actions">
+        <button class="btn pri" id="novaCompra">+ Compra no cartão</button>
+        <button class="btn" id="cartaoBtn">Cadastrar cartão</button>
+      </div>
+      <form class="panel" id="formCompra" hidden autocomplete="off">
+        <h2 id="compraTit">Nova compra no cartão</h2>
+        <div class="grid">
+          <label class="f full">Cartão<select id="cCartao"></select></label>
+          <label class="f full">Descrição<input id="cDesc" maxlength="80" placeholder="Ex.: Pneus do carro" required></label>
+          <label class="f">Valor total (R$)<input id="cValor" class="valor" inputmode="decimal" placeholder="0,00" required></label>
+          <label class="f">Parcelas<input id="cParc" type="number" min="1" max="48" value="1" required></label>
+          <label class="f">Data da compra<input id="cData" type="date" required></label>
+          <label class="f">Categoria<select id="cCat"></select></label>
+        </div>
+        <div class="calc" id="cCalc">Informe valor e parcelas.</div>
+        <div class="row-end">
+          <div class="bar-actions"><button class="btn pri" type="submit">Salvar compra</button><button class="btn" type="button" id="cCancelar">Cancelar</button></div>
+          <button class="btn danger" type="button" id="cExcluir" hidden>Excluir</button>
+        </div>
+      </form>
+      <form class="panel" id="formCartao" hidden autocomplete="off">
+        <h2 id="cartaoTit">Novo cartão</h2>
+        <div class="grid">
+          <label class="f full">Nome do cartão<input id="kNome" maxlength="40" placeholder="Ex.: Nubank" required></label>
+          <label class="f">Dia do fechamento<input id="kFecha" type="number" min="1" max="31" required></label>
+          <label class="f">Dia do vencimento<input id="kVence" type="number" min="1" max="31" required></label>
+          <label class="f full">Limite (R$, opcional)<input id="kLim" class="valor" inputmode="decimal" placeholder="0,00"></label>
+        </div>
+        <p class="note">Compras feitas até o dia do fechamento entram na fatura seguinte; depois dele, na outra.</p>
+        <div id="kAutWrap" hidden style="display:flex;flex-direction:column;gap:8px">
+          <h2>Quem pode lançar compras neste cartão</h2>
+          <p class="note">Essas pessoas registram as próprias compras aqui. Você vê quanto cada uma gastou na fatura; elas não veem as suas compras.</p>
+          <div id="kAutList"></div>
+          <div class="inline"><input id="kAutEmail" type="email" placeholder="E-mail da pessoa"><button type="button" class="btn sm" id="kAutAdd">Autorizar</button></div>
+        </div>
+        <div class="row-end">
+          <div class="bar-actions"><button class="btn pri" type="submit">Salvar cartão</button><button class="btn" type="button" id="kCancelar">Cancelar</button></div>
+          <button class="btn danger" type="button" id="kExcluir" hidden>Excluir cartão</button>
+        </div>
+      </form>
+      <div id="ccList" class="view"></div>
+    </div>
+  </div>
+</div>
+<div id="toast" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "financas-da-casa-lembretes",
+  "private": true,
+  "type": "module",
+  "scripts": { "enviar": "node enviar.mjs", "testar": "node enviar.mjs --testar" },
+  "dependencies": { "firebase-admin": "12.7.0" }
+}

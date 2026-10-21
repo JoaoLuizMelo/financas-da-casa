@@ -1,7 +1,7 @@
-// Finanças da Casa — service worker: permite instalar e abrir o app mesmo com internet fraca.
+// Alicerce — service worker: permite instalar e abrir o app mesmo com internet fraca.
 // Estratégia: rede primeiro para os arquivos do app (sempre a versão mais nova), cópia local como reserva.
-const CACHE = "fc-v1";
-const ARQUIVOS = ["./", "index.html", "styles.css", "app.js", "nucleo.js", "ocr.js", "firebase-config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const CACHE = "alicerce-v4";
+const ARQUIVOS = ["./", "index.html", "styles.css", "app.js", "nucleo.js", "ocr.js", "balanco.js", "firebase-config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "monograma.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {

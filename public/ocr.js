@@ -1,4 +1,4 @@
-// Finanças da Casa — leitura de nota fiscal no próprio celular (gratuita, sem servidor)
+// Alicerce — leitura de nota fiscal no próprio celular (gratuita, sem servidor)
 // Usa Tesseract.js (OCR) e jsQR (QR Code da NFC-e), carregados sob demanda.
 
 const TESSERACT = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js";

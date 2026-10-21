@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Finanças da Casa</title>
-<meta name="theme-color" content="#0f5868">
+<title>Alicerce</title>
+<meta name="description" content="Alicerce — finanças pessoais, da empresa e do casal.">
+<meta name="theme-color" content="#0b1214">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Finanças">
+<meta name="apple-mobile-web-app-title" content="Alicerce">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -20,7 +22,7 @@
   <!-- ===== LOGIN ===== -->
   <div class="auth" id="auth" hidden>
     <form class="card" id="authForm" autocomplete="on">
-      <h1>Finanças da Casa</h1>
+      <div class="auth-brand"><img class="auth-logo" src="monograma.png" alt=""><b>ALICERCE</b><span>Finanças pessoais, da empresa e do casal</span></div>
       <p class="note" id="authSub">Entre com seu e-mail e senha.</p>
       <label class="f" id="nomeWrap" hidden>Seu nome<input id="aNome" autocomplete="name" maxlength="30"></label>
       <label class="f">E-mail<input id="aEmail" type="email" autocomplete="email" required></label>
@@ -36,15 +38,18 @@
 
   <!-- ===== APP ===== -->
   <div id="app" class="view" hidden>
-    <div class="top">
-      <h1>Finanças da Casa</h1>
+    <header class="brandbar">
+      <div class="brand"><img class="brand-logo" src="monograma.png" alt=""><div class="brand-txt"><b>Alicerce</b><span id="whoName">—</span></div></div>
+      <button class="avatar" id="ajBtn" aria-label="Conta e compartilhamento" title="Conta e compartilhamento">—</button>
+    </header>
+    <div class="mesbar">
       <div class="mes">
         <button class="ib" id="prev" aria-label="Mês anterior">‹</button>
         <b id="mesLbl">—</b>
         <button class="ib" id="next" aria-label="Próximo mês">›</button>
       </div>
+      <span class="badge open" id="mesStatus">Mês em aberto</span>
     </div>
-    <div class="who"><span id="whoName"></span><button class="btn sm" id="ajBtn">Conta e compartilhamento</button></div>
 
     <section class="panel" id="ajPanel" hidden>
       <h2>Minha conta</h2>
@@ -74,6 +79,7 @@
       <button role="tab" data-v="resumo" aria-selected="true">Resumo</button>
       <button role="tab" data-v="lanc" aria-selected="false">Lançamentos</button>
       <button role="tab" data-v="cartoes" aria-selected="false">Cartões</button>
+      <button role="tab" data-v="arquivo" aria-selected="false">Arquivo</button>
     </div>
 
     <div class="filters">
@@ -87,12 +93,33 @@
 
     <!-- RESUMO -->
     <div class="view" id="v-resumo">
-      <div class="kpis" aria-live="polite">
-        <div class="kpi"><span>Receitas</span><strong id="sRec" class="in">R$ 0,00</strong></div>
-        <div class="kpi"><span>Despesas</span><strong id="sDes" class="out">R$ 0,00</strong></div>
-        <div class="kpi main"><span id="sSalLbl">Saldo do mês</span><strong id="sSal">R$ 0,00</strong></div>
-        <div class="kpi"><span>A pagar</span><strong id="sPen" class="warn">R$ 0,00</strong></div>
+      <div class="banner" id="fechBanner" hidden>
+        <div class="ic">✓</div>
+        <div><b id="fechBannerTit">Fechar o balanço</b><span id="fechBannerSub">Confira os lançamentos e gere o PDF do mês.</span></div>
+        <button class="btn hot" id="fechBannerBtn">Fechar mês</button>
       </div>
+      <section class="hero" aria-live="polite">
+        <div class="hero-main">
+          <span class="eyebrow" id="sSalLbl">Saldo do mês</span>
+          <div class="hero-val pos" id="sSal">R$ 0,00</div>
+          <span class="hero-sub" id="sSalSub">Receitas menos despesas do mês</span>
+          <div class="gauge">
+            <div class="gauge-bar"><i id="gaugeBar" style="width:0%"></i></div>
+            <div class="gauge-txt"><span id="gaugeTxt">Despesas consomem 0% das receitas</span><span id="gaugePct" class="num"></span></div>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="stat"><span class="ic in">↑</span><span>Receitas</span><strong id="sRec" class="in">R$ 0,00</strong></div>
+          <div class="stat"><span class="ic out">↓</span><span>Despesas</span><strong id="sDes" class="out">R$ 0,00</strong></div>
+          <div class="stat"><span class="ic warn">!</span><span>A pagar</span><strong id="sPen" class="warn">R$ 0,00</strong></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Evolução — últimos 6 meses</h2>
+          <div class="legend"><span><i style="background:var(--in)"></i>Receitas</span><span><i style="background:var(--out)"></i>Despesas</span><span><i style="background:var(--accent);height:2px;border-radius:0"></i>Saldo</span></div></div>
+        <div id="trend"></div>
+        <div class="trend-tip" id="trendTip">Toque num mês para ver os valores.</div>
+      </section>
       <section class="card" id="vencSec" hidden>
         <div class="card-h"><h2>Próximos vencimentos</h2><span class="eyebrow" id="vencJanela"></span></div>
         <div class="venc" id="vencList"></div>
@@ -127,6 +154,7 @@
         <button class="btn" id="fotoBtn">Ler nota por foto</button>
         <input type="file" id="fotoIn" accept="image/*" capture="environment" hidden>
         <button class="btn" id="csv">Exportar CSV</button>
+        <button class="btn" id="pdfAtual">PDF do mês</button>
       </div>
       <form class="panel" id="form" hidden autocomplete="off">
         <div class="row-end">
@@ -206,6 +234,29 @@
         </div>
       </form>
       <div id="ccList" class="view"></div>
+    </div>
+
+    <!-- ARQUIVO -->
+    <div class="view" id="v-arquivo" hidden>
+      <form class="panel" id="fechPanel" hidden autocomplete="off">
+        <div class="card-h"><h2 id="fechTit">Fechar balanço</h2><span class="eyebrow">conferência</span></div>
+        <div class="fech-kpis">
+          <div><span>Receitas</span><b class="in" id="fkRec">—</b></div>
+          <div><span>Despesas</span><b class="out" id="fkDes">—</b></div>
+          <div><span>Resultado</span><b id="fkRes">—</b></div>
+        </div>
+        <p class="note" id="fechInfo"></p>
+        <label class="check"><input type="checkbox" id="fechOk" required> Conferi os lançamentos e as faturas deste mês</label>
+        <label class="f">Observações do mês (opcional)<input id="fechObs" maxlength="200" placeholder="Ex.: mês com IPTU e manutenção do carro"></label>
+        <div class="row-end">
+          <div class="bar-actions"><button class="btn hot" type="submit" id="fechGo">Fechar e gerar PDF</button><button class="btn" type="button" id="fechCancel">Cancelar</button></div>
+        </div>
+      </form>
+      <section class="card">
+        <div class="card-h"><h2>Balanços arquivados</h2><button class="btn sm pri" id="fechNovo">Fechar mês atual</button></div>
+        <p class="note">Cada fechamento guarda uma cópia fixa do mês. O PDF pode ser baixado de novo a qualquer momento, igual ao original.</p>
+        <div class="arq" id="arqList"></div>
+      </section>
     </div>
   </div>
 </div>

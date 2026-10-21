@@ -1,10 +1,11 @@
-// Finanças da Casa — aplicativo (Firebase Auth + Firestore, plano gratuito)
+// Alicerce — aplicativo (Firebase Auth + Firestore, plano gratuito)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc, arrayUnion, arrayRemove, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { PLANO, AMB_NOME, MESES, pad, hojeISO, addMeses, addMes, diasNoMes, difDias, dm, mesCurto, brl, parseValor, fmtIn, grupoDe, ambitoDe, mesFatura, valorParcela, vencFatura, fechamentoFatura, parcelasNoMes, vencimentos, textoLembrete } from "./nucleo.js";
+import { PLANO, AMB_NOME, MESES, MES3, pad, hojeISO, addMeses, addMes, diasNoMes, difDias, dm, mesCurto, brl, parseValor, fmtIn, grupoDe, ambitoDe, mesFatura, valorParcela, vencFatura, fechamentoFatura, parcelasNoMes, vencimentos, textoLembrete } from "./nucleo.js";
 import { lerNota, sugerirPorTexto, formatarCnpj } from "./ocr.js";
+import { montarBalanco, gerarPdf } from "./balanco.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -48,13 +49,14 @@ function sincronizar() {
   for (const u of membros()) {
     quero.add(`lm:${u}:${mes}`); quero.add(`pd:${u}`); quero.add(`cp:${u}`); if (u !== uid) quero.add(`ko:${u}`);
   }
-  ["cd", "ko", "ka", "rg", "eu", "pv", "sh"].forEach(k => quero.add(`${k}:${uid}`));
+  ["cd", "ko", "ka", "rg", "eu", "pv", "sh", "fc"].forEach(k => quero.add(`${k}:${uid}`));
   for (const ct of cartoes()) quero.add(`ft:${ct.id}`);
   for (const k of [...subs.keys()]) if (!quero.has(k)) { subs.get(k)(); subs.delete(k); res.delete(k); }
   for (const k of quero) {
     if (subs.has(k)) continue;
     const [t, a, b] = k.split(":");
-    if (t === "lm") assinar(k, query(collection(db, "users", a, "lancamentos"), where("mes", "==", b)), d => ({ id: d.id, ...d.data(), uid: a }));
+    if (t === "lm") assinar(k, query(collection(db, "users", a, "lancamentos"), where("mes", "in", janela(b))), d => ({ id: d.id, ...d.data(), uid: a }));
+    else if (t === "fc") assinar(k, collection(db, "users", a, "fechamentos"));
     else if (t === "pd") assinar(k, query(collection(db, "users", a, "lancamentos"), where("pago", "==", false)), d => ({ id: d.id, ...d.data(), uid: a }));
     else if (t === "cp") assinar(k, query(collection(db, "compras"), where("comprador", "==", a)));
     else if (t === "cd") assinar(k, query(collection(db, "compras"), where("dono", "==", a)));
@@ -74,7 +76,9 @@ const cartoes = () => juntar("ko:").concat(juntar("ka:")).filter((x, i, a) => a.
 const compras = () => juntar("cp:").concat(juntar("cd:")).filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
 const faturas = () => Object.fromEntries(juntar("ft:").map(f => [f.id, f]));
 const regras = () => Object.fromEntries((res.get(`rg:${uid}`) || []).map(r => [r.id, r]));
-const lancMes = () => juntar("lm:").filter(l => l.mes === mes);
+const janela = m => [5, 4, 3, 2, 1, 0].map(k => addMes(m, -k));
+const lancMes = (m = mes) => juntar("lm:").filter(l => l.mes === m);
+const fechamentos = () => (res.get(`fc:${uid}`) || []).sort((a, b) => b.id.localeCompare(a.id));
 const pendentes = () => juntar("pd:");
 let pendRender = false;
 function agendar() { if (pendRender) return; pendRender = true; requestAnimationFrame(() => { pendRender = false; if (!uid) return; sincronizar(); render(); }); }
@@ -97,18 +101,26 @@ function visivel() {
 const passaPessoa = l => visivel().has(l.uid);
 const passaAmb = l => ambF === "todos" || ambitoDe(l) === ambF;
 const parcelas = m => parcelasNoMes(compras(), cartoes(), faturas(), m);
-const doMes = () => lancMes().concat(parcelas(mes));
-const visiveis = () => doMes().filter(l => passaPessoa(l) && passaAmb(l));
+const doMes = (m = mes) => lancMes(m).concat(parcelas(m));
+const visiveis = (m = mes) => doMes(m).filter(l => passaPessoa(l) && passaAmb(l));
 function somar(arr) { let rec = 0, des = 0, pen = 0; arr.forEach(l => { if (l.tipo === "receita") rec += l.valor; else { des += l.valor; if (!l.pago) pen += l.valor; } }); return { rec, des, pen, res: rec - des }; }
 
 /* ===== render ===== */
 function render() {
   $("#mesLbl").textContent = (() => { const [y, m] = mes.split("-").map(Number); return `${MESES[m - 1]} ${y}`; })();
-  $("#whoName").textContent = ""; $("#whoName").append("Olá, ", Object.assign(el("b"), { textContent: nomeDe(uid) }));
+  const meuNome = nomeDe(uid); $("#whoName").textContent = `Olá, ${meuNome}`; $("#ajBtn").textContent = (meuNome[0] || "?").toUpperCase(); $("#ajBtn").style.borderColor = corDe(uid);
+  const fMes = fechamentos().find(f => f.id === mes); const st = $("#mesStatus");
+  st.className = "badge" + (fMes ? "" : " open"); st.textContent = fMes ? `Fechado em ${dm(new Date(fMes.fechadoEm).toISOString().slice(0, 10))}` : (mes < hojeISO().slice(0, 7) ? "Mês anterior em aberto" : "Mês em aberto");
   renderChips(); renderVista();
   const v = visiveis(), t = somar(v);
-  $("#sRec").textContent = brl(t.rec); $("#sDes").textContent = brl(t.des); $("#sPen").textContent = brl(t.pen);
-  $("#sSalLbl").textContent = ambF === "empresa" ? "Resultado da empresa" : "Saldo do mês"; $("#sSal").textContent = brl(t.res);
+  contar($("#sRec"), t.rec); contar($("#sDes"), t.des); contar($("#sPen"), t.pen); contar($("#sSal"), t.res);
+  $("#sSal").className = "hero-val " + (t.res < 0 ? "neg" : "pos");
+  $("#sSalLbl").textContent = ambF === "empresa" ? "Resultado da empresa" : visivel().size > 1 ? "Saldo conjunto do mês" : "Saldo do mês";
+  $("#sSalSub").textContent = t.rec ? `${t.res >= 0 ? "Sobraram" : "Faltaram"} ${Math.abs(Math.round(t.res / t.rec * 100))}% das receitas` : "Sem receitas lançadas neste mês";
+  const pct = t.rec ? t.des / t.rec * 100 : (t.des ? 100 : 0);
+  $("#gaugeBar").style.width = Math.min(100, pct) + "%"; $("#gaugeBar").classList.toggle("over", pct > 100);
+  $("#gaugeTxt").textContent = t.rec ? "Despesas em relação às receitas" : "Comprometimento das receitas"; $("#gaugePct").textContent = Math.round(pct) + "%";
+  renderTrend(); renderFechBanner(); renderArquivo();
   renderVenc();
   const des = v.filter(l => l.tipo === "despesa"), rec = v.filter(l => l.tipo === "receita");
   donut($("#dGrupo"), "Despesas por grupo", agrupar(des, grupoDe), "Sem despesas no mês");
@@ -135,7 +147,119 @@ function renderChips() {
   if (sharers.length > 1) mk("todos", "Balanço: todos");
   document.querySelectorAll("#amb button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.a === ambF)));
 }
-function renderVista() { document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === vista))); ["resumo", "lanc", "cartoes"].forEach(x => $("#v-" + x).hidden = x !== vista); }
+function renderVista() { document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === vista))); ["resumo", "lanc", "cartoes", "arquivo"].forEach(x => $("#v-" + x).hidden = x !== vista); }
+
+/* contador animado para os valores do painel */
+function contar(elm, alvo) {
+  const de = +(elm.dataset.v ?? alvo); elm.dataset.v = alvo;
+  if (de === alvo || matchMedia("(prefers-reduced-motion: reduce)").matches) { elm.textContent = brl(alvo); return; }
+  const t0 = performance.now(), dur = 650;
+  cancelAnimationFrame(elm._raf);
+  const passo = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); elm.textContent = brl(Math.round(de + (alvo - de) * e)); if (p < 1) elm._raf = requestAnimationFrame(passo); };
+  elm._raf = requestAnimationFrame(passo);
+}
+
+/* gráfico de evolução: receitas x despesas (barras) e saldo (linha), 6 meses até o mês selecionado */
+let trendSel = null, trendChave = "";
+function renderTrend() {
+  const meses = janela(mes), dados = meses.map(m => { const x = somar(visiveis(m)); return { m, ...x }; });
+  const chave = JSON.stringify(dados) + mes; if (chave === trendChave) return; trendChave = chave;
+  const box = $("#trend"); box.textContent = "";
+  const W = Math.max(320, Math.min(760, box.clientWidth || 640)), H = W < 480 ? 200 : 220, L = 46, Rr = 8, T = 12, B = 30, iw = W - L - Rr, ih = H - T - B;
+  const max = Math.max(1, ...dados.map(d => Math.max(d.rec, d.des))), min = Math.min(0, ...dados.map(d => d.res));
+  const passoY = (() => { const bruto = (max - min) / 4, p10 = Math.pow(10, Math.floor(Math.log10(bruto))); return [1, 2, 2.5, 5, 10].map(k => k * p10).find(k => k >= bruto); })();
+  const top = Math.ceil(max / passoY) * passoY, bot = Math.floor(min / passoY) * passoY;
+  const y = v => T + ih - (v - bot) / (top - bot) * ih;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "trend", role: "img", "aria-label": "Receitas e despesas dos últimos 6 meses" });
+  for (let v = bot; v <= top + 1; v += passoY) {
+    svg.append(sv("line", { x1: L, x2: W - Rr, y1: y(v), y2: y(v), class: v === 0 ? "axis" : "gridl" }));
+    const t = sv("text", { x: L - 8, y: y(v) + 3, "text-anchor": "end", class: "lbl" }); t.textContent = abreviar(v); svg.append(t);
+  }
+  const bw = iw / meses.length, barw = Math.min(22, bw * 0.28);
+  const pts = [];
+  dados.forEach((d, i) => {
+    const cx = L + bw * i + bw / 2;
+    const r1 = sv("rect", { x: cx - barw - 2, y: y(d.rec), width: barw, height: Math.max(0, y(0) - y(d.rec)), rx: 3, fill: "var(--in)", class: "b" });
+    const r2 = sv("rect", { x: cx + 2, y: y(d.des), width: barw, height: Math.max(0, y(0) - y(d.des)), rx: 3, fill: "var(--out)", class: "b" });
+    r1.style.animationDelay = r2.style.animationDelay = (i * 0.05) + "s";
+    const ml = sv("text", { x: cx, y: H - 8, "text-anchor": "middle", class: "mlbl" + (d.m === mes ? " cur" : "") }); ml.textContent = mesCurto(d.m);
+    const hit = sv("rect", { x: L + bw * i, y: T, width: bw, height: ih + B, class: "hit" });
+    const mostrar = () => { trendSel = i; svg.querySelectorAll("rect.b").forEach((r, j) => r.style.opacity = Math.floor(j / 2) === i ? 1 : .35); tip(d); };
+    hit.addEventListener("mouseenter", mostrar); hit.addEventListener("click", mostrar);
+    svg.append(r1, r2, ml); pts.push([cx, y(d.res)]); svg._hits = (svg._hits || []).concat(hit);
+  });
+  svg.append(sv("polyline", { points: pts.map(p => p.join(",")).join(" "), class: "line" }));
+  pts.forEach(p => svg.append(sv("circle", { cx: p[0], cy: p[1], r: 4, class: "pt" })));
+  svg._hits.forEach(h => svg.append(h));
+  svg.addEventListener("mouseleave", () => { svg.querySelectorAll("rect.b").forEach(r => r.style.opacity = 1); tip(dados[dados.length - 1]); });
+  const tip = d => { const t = $("#trendTip"); t.textContent = ""; const nm = el("span", null, `${MESES[+d.m.slice(5) - 1]}/${d.m.slice(0, 4)}:`); nm.style.textTransform = "capitalize";
+    const it = (r, v, c) => { const s = el("span", null, r + " "); s.append(Object.assign(el("b", c), { textContent: brl(v) })); return s; };
+    t.append(nm, it("Receitas", d.rec, "in"), it("Despesas", d.des, "out"), it("Saldo", d.res, d.res < 0 ? "out" : "")); };
+  box.append(svg); tip(dados[dados.length - 1]);
+}
+const abreviar = v => { const r = v / 100, a = Math.abs(r); return (r < 0 ? "−" : "") + (a >= 1000 ? (a / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil" : a.toLocaleString("pt-BR", { maximumFractionDigits: 0 })); };
+
+/* ===== fechamento mensal ===== */
+function mesParaFechar() {
+  const h = hojeISO(), M = h.slice(0, 7), ant = addMes(M, -1), feitos = new Set(fechamentos().map(f => f.id));
+  const temDados = m => lancMes(m).some(l => l.uid === uid) || parcelas(m).some(p => p.uid === uid);
+  if (!feitos.has(ant) && temDados(ant)) return ant;
+  if (+h.slice(8) >= diasNoMes(M) - 2 && !feitos.has(M)) return M;
+  return null;
+}
+function renderFechBanner() {
+  const m = mesParaFechar(), b = $("#fechBanner"); b.hidden = !m || vista !== "resumo";
+  if (!m) return;
+  const nome = MESES[+m.slice(5) - 1];
+  $("#fechBannerTit").textContent = `Fechar o balanço de ${nome}`;
+  $("#fechBannerSub").textContent = m < hojeISO().slice(0, 7) ? `${nome[0].toUpperCase() + nome.slice(1)} terminou. Confira os lançamentos e gere o PDF do mês.` : `O mês termina em ${diasNoMes(m) - +hojeISO().slice(8)} dia(s). Quando tudo estiver lançado, feche o balanço.`;
+  $("#fechBannerBtn").onclick = () => abrirFechamento(m);
+}
+function balancoDe(m, opcoes = {}) {
+  const meus = doMes(m).filter(l => (opcoes.conjunto ? passaPessoa(l) : l.uid === uid));
+  return montarBalanco({ mes: m, itens: meus, nome: opcoes.titulo || nomeDe(uid), pessoas: Object.fromEntries([...visivel()].map(u => [u, nomeDe(u)])), conjunto: !!opcoes.conjunto, obs: opcoes.obs || "", cartoes: cartoes() });
+}
+let fechMes = null;
+function abrirFechamento(m) {
+  if (m > hojeISO().slice(0, 7)) { toast("Só é possível fechar meses que já começaram."); return; }
+  vista = "arquivo"; renderVista(); fecharPaineis(); fechMes = m;
+  if (mes !== m) { mes = m; agendar(); }
+  const b = balancoDe(m), jaFechado = fechamentos().find(f => f.id === m);
+  $("#fechTit").textContent = `${jaFechado ? "Refazer" : "Fechar"} balanço de ${MESES[+m.slice(5) - 1]}/${m.slice(0, 4)}`;
+  $("#fkRec").textContent = brl(b.totais.rec); $("#fkDes").textContent = brl(b.totais.des); $("#fkRes").textContent = brl(b.totais.res); $("#fkRes").className = b.totais.res < 0 ? "out" : "in";
+  $("#fechInfo").textContent = `${b.lancamentos.length} lançamento(s)${b.totais.pen ? ` · ${brl(b.totais.pen)} ainda marcados como “a pagar”` : ""}. O fechamento guarda uma cópia fixa destes números; lançamentos alterados depois não mudam o balanço arquivado, a menos que você o refaça.`;
+  $("#fechOk").checked = false; $("#fechObs").value = jaFechado?.obs || "";
+  $("#fechPanel").hidden = false; $("#fechPanel").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+$("#fechNovo").onclick = () => { const M = hojeISO().slice(0, 7), ant = addMes(M, -1); abrirFechamento(!fechamentos().some(f => f.id === ant) ? ant : M); };
+$("#fechCancel").onclick = () => { $("#fechPanel").hidden = true; fechMes = null; };
+$("#fechPanel").addEventListener("submit", async ev => {
+  ev.preventDefault(); if (!fechMes) return;
+  const btn = $("#fechGo"); btn.disabled = true;
+  try {
+    const b = balancoDe(fechMes, { obs: $("#fechObs").value.trim() });
+    b.fechadoEm = Date.now();
+    await setDoc(doc(db, "users", uid, "fechamentos", fechMes), JSON.parse(JSON.stringify(b)));
+    toast("Balanço fechado e arquivado. Gerando o PDF…");
+    await gerarPdf(b);
+    $("#fechPanel").hidden = true; fechMes = null;
+  } catch (e) { falha(e); }
+  btn.disabled = false;
+});
+function renderArquivo() {
+  const box = $("#arqList"); box.textContent = ""; const fs = fechamentos();
+  if (!fs.length) { const e = el("div", "empty"); e.append(el("strong", null, "Nenhum balanço arquivado"), "No fim de cada mês, use “Fechar mês” para gerar o PDF e guardar o balanço aqui."); box.append(e); return; }
+  fs.forEach(f => {
+    const r = el("div", "arq-row"), ic = el("div", "arq-ic"); ic.append(Object.assign(el("b"), { textContent: MES3[+f.id.slice(5) - 1] }), f.id.slice(0, 4));
+    const t = el("div"); t.append(el("div", "d", `Balanço de ${MESES[+f.id.slice(5) - 1]}/${f.id.slice(0, 4)}`),
+      el("div", "m", `Resultado ${brl(f.totais?.res || 0)} · fechado em ${new Date(f.fechadoEm).toLocaleDateString("pt-BR")}`));
+    const a = el("div", "arq-acts"); const pdf = el("button", "btn sm pri", "Baixar PDF"); pdf.onclick = () => gerarPdf(f).catch(falha);
+    const ver = el("button", "btn sm", "Ver mês"); ver.onclick = () => { mes = f.id; vista = "resumo"; agendar(); };
+    const re = el("button", "btn sm", "Refazer"); re.onclick = () => abrirFechamento(f.id);
+    const del = el("button", "btn sm danger", "Excluir"); del.type = "button"; armar(del, "Excluir", async () => { try { await deleteDoc(doc(db, "users", uid, "fechamentos", f.id)); toast("Balanço removido do arquivo."); } catch (e) { falha(e); } });
+    a.append(pdf, ver, re, del); r.append(ic, t, a); box.append(r);
+  });
+}
 
 /* gráfico de rosca com legenda; tocar numa fatia mostra valor e % no centro */
 function donut(alvo, titulo, itens, vazio) {
@@ -153,7 +277,7 @@ function donut(alvo, titulo, itens, vazio) {
   svg.append(t1, t2, t3);
   const leg = el("div", "leg"), sl = [], lb = [];
   const centro = i => {
-    sl.forEach((s, j) => s.classList.toggle("on", j === i)); lb.forEach((b, j) => b.classList.toggle("on", j === i));
+    sl.forEach((s, j) => s.classList.toggle("on", j === i)); lb.forEach((b, j) => b.classList.toggle("on", j === i)); svg.classList.toggle("has-on", i != null);
     if (i == null) { t1.textContent = "Total"; t2.textContent = brl(total); t3.textContent = lista.length + (lista.length > 1 ? " itens" : " item"); }
     else { const x = lista[i]; t1.textContent = x.n.length > 22 ? x.n.slice(0, 21) + "…" : x.n; t2.textContent = brl(x.v); t3.textContent = (x.v / total * 100).toFixed(1).replace(".", ",") + "%"; }
   };
@@ -305,7 +429,7 @@ function setTipo(t, val) {
   $("#pagoLbl").textContent = t === "receita" ? "Já foi recebido" : "Já está pago"; atualizarEmp();
 }
 function valorCat(l) { const gi = PLANO[l.tipo].findIndex(g => g.g === grupoDe(l)); if (gi < 0) return null; const ci = PLANO[l.tipo][gi].i.indexOf(l.categoria); return ci < 0 ? null : gi + "|" + ci; }
-function fecharPaineis() { ["#form", "#ajPanel", "#formCompra", "#formCartao"].forEach(s => $(s).hidden = true); }
+function fecharPaineis() { ["#form", "#ajPanel", "#formCompra", "#formCartao", "#fechPanel"].forEach(s => $(s).hidden = true); }
 function abrirForm(l) {
   if (l && l.uid !== uid) { toast(`Lançamento de ${nomeDe(l.uid)}. Só essa pessoa pode alterar.`); return; }
   vista = "lanc"; renderVista(); fecharPaineis(); $("#iaBox").hidden = true; ocr = null; editId = l ? l.id : null;
@@ -510,10 +634,11 @@ $("#ajFechar").onclick = () => $("#ajPanel").hidden = true;
 armar($("#sair"), "Sair da conta", () => signOut(auth));
 
 /* ===== navegação e exportação ===== */
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { vista = b.dataset.v; try { localStorage.setItem("fc-vista", vista); } catch (e) {} renderVista(); });
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { vista = b.dataset.v; try { localStorage.setItem("fc-vista", vista); } catch (e) {} renderVista(); renderFechBanner(); });
 document.querySelectorAll("#amb button").forEach(b => b.onclick = () => { ambF = b.dataset.a; render(); });
 $("#prev").onclick = () => { mes = addMes(mes, -1); agendar(); };
 $("#next").onclick = () => { mes = addMes(mes, 1); agendar(); };
+$("#pdfAtual").onclick = () => { const conj = visivel().size > 1; gerarPdf(balancoDe(mes, { conjunto: conj, titulo: conj ? [...visivel()].map(nomeDe).join(" + ") : nomeDe(uid) })).catch(falha); };
 $("#csv").onclick = () => {
   const v = visiveis().slice().sort((a, b) => a.data.localeCompare(b.data)), q = s => `"${String(s ?? "").replace(/"/g, '""')}"`;
   const head = ["Data", "Tipo", "Âmbito", "Grupo", "Categoria", "Descrição", "Prestador/Cliente", "Projeto/Obra", "NF/Recibo", "Cartão", "Pessoa", "Valor", "Situação"];

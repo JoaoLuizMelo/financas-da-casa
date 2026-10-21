@@ -1,4 +1,4 @@
-// Finanças da Casa — regras de negócio puras (usadas pelo app e pelo script de lembretes)
+// Alicerce — regras de negócio puras (usadas pelo app e pelo script de lembretes)
 
 /* Plano de contas: âmbito → grupo → categoria */
 export const PLANO = {
@@ -102,7 +102,7 @@ export function vencimentos({ pendentes, compras, cartoes, faturas, hoje, dias, 
 }
 
 export function textoLembrete(lista, hoje) {
-  return "*Finanças da Casa — vencimentos*\n" + lista.map(x => {
+  return "*Alicerce — vencimentos*\n" + lista.map(x => {
     const dd = difDias(hoje, x.data);
     return `• ${dm(x.data)}${dd < 0 ? " (ATRASADO)" : dd === 0 ? " (HOJE)" : ""} — ${x.d}: ${brl(x.v)}`;
   }).join("\n") + `\nTotal: ${brl(lista.reduce((s, x) => s + x.v, 0))}`;

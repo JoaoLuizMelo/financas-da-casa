@@ -142,3 +142,27 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .lib-st{font-weight:600;font-size:.95rem} .lib-st.late{color:var(--late)} .lib-st.soon{color:var(--warn)}
 .pp-alert.info{color:var(--accent);border-color:rgba(79,179,198,.35)}
 .lib-btn{background:var(--warn-soft);text-align:left;cursor:pointer;font:inherit;font-size:.8rem;width:100%}
+
+.pp-tog{background:none;border:0;padding:0;margin:0;width:100%;text-align:left;color:inherit;cursor:pointer;font:inherit}
+.pp-tog:hover .pp-nome{color:var(--accent)}
+.pp-dir{display:flex;align-items:center;gap:8px}
+.chev{color:var(--muted);font-size:1rem;transition:transform .18s;display:inline-block}
+.pp.open .chev{transform:rotate(180deg)}
+.pp-res{display:flex;flex-direction:column;gap:5px}
+.pp-res-l{display:flex;justify-content:space-between;gap:10px;font-size:.8rem;color:var(--fg-2)}
+.pp-res-l span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-res .mini{height:6px}
+.pp:not(.open){gap:9px}
+.pp-acts{justify-content:space-between}
+
+.ro .so-dono,.ro #impCard,.ro #propCard,.ro #fPrazo .lib,.ro #fPrazo .bar-actions,.ro .lib-btn{display:none!important}
+.ro .ck,.ro .pp-list input{opacity:.7;cursor:not-allowed}
+#donos{align-items:center}
+.share-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.share-row:first-child{border-top:0}
+.inline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.inline input{border:1px solid var(--line-2);background:var(--bg-2);border-radius:9px;padding:9px 10px;color:var(--fg);min-width:0}
+.tqs-top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}
+.tqs-top label.f input{border:1px solid var(--line-2);background:var(--bg-2);border-radius:9px;padding:9px 10px;color:var(--fg)}
+@media (max-width:480px){.tqs-top{grid-template-columns:1fr 1fr}.tqs-top label{grid-column:1/-1}}
+.tqs-list .v{display:flex;align-items:center;gap:4px}

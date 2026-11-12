@@ -133,7 +133,7 @@ export function interpretarProposta(bruto) {
     if (/BLOCOS? SOBRE ESTACAS/.test(F) && !/\[/.test(F)) lista.push("Blocos sobre estacas");
     if (/\[.*\/.*\]/.test(fund)) avisos.push("O tipo de fundação está em aberto na proposta ([sapatas / blocos / radier]) — confirme no checklist.");
     const det = entre("4. DETALHAMENTO", "5. DOCUMENTOS").toUpperCase();
-    r.estrutural = { tqs: /TQS/.test(U) ? "alugar" : "nao", fund: lista.length ? lista : ["Sapatas isoladas"], npav: 1, coberta: true, rampa: /RAMPA/.test(det), rsup: /RESERVAT/.test(det), rinf: false,
+    r.estrutural = { tqs: /TQS/.test(U) ? "alugar" : "nao", fund: lista.length ? lista : ["Sapatas isoladas"], npav: 1, coberta: true, escada: /ESCADA/.test(det), rampa: /RAMPA/.test(det), piscina: /PISCINA/.test(U), rsup: /RESERVAT/.test(det), rinf: false,
       sistema: /MET[AÁ]LIC/.test(U.slice(0, 800)) ? "Metálico" : "Concreto armado" };
   }
   return r;

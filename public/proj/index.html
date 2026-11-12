@@ -35,19 +35,27 @@
   <div id="app" class="view" hidden>
     <header class="brandbar">
       <div class="brand"><img class="brand-logo" src="../monograma.png" alt=""><div class="brand-txt"><b>Alicerce Proj</b><span id="whoName">—</span></div></div>
-      <div class="bar-actions"><a class="btn sm" href="../" title="Abrir o Alicerce financeiro">Finanças ↗</a><button class="avatar" id="sairBtn" title="Sair da conta">—</button></div>
+      <div class="bar-actions"><button class="btn sm so-dono" id="shBtn" type="button">Compartilhar</button><a class="btn sm" href="../" title="Abrir o Alicerce financeiro">Finanças ↗</a><button class="avatar" id="sairBtn" title="Sair da conta">—</button></div>
     </header>
 
     <!-- ===== LISTA ===== -->
+    <section class="panel" id="shPanel" hidden>
+      <div class="card-h"><h2>Compartilhar meus projetos</h2><button class="btn sm" id="shFechar" type="button">Fechar</button></div>
+      <p class="note">A pessoa vê seus projetos, etapas, prazos e valores, e pode registrar anotações. Ela não altera nada e não vê suas finanças. Ela precisa ter conta no Alicerce (botão “Criar conta” na tela de entrada do Alicerce financeiro).</p>
+      <div id="shList"></div>
+      <div class="inline"><input id="shEmail" type="email" placeholder="E-mail da pessoa"><button class="btn sm pri" id="shAdd" type="button">Compartilhar</button></div>
+    </section>
+    <div class="chips" id="donos" hidden></div>
     <div class="view" id="vLista">
       <section class="pp-kpis" id="kpis"></section>
       <section class="card" id="agendaCard">
         <div class="card-h"><h2>Próximos 15 dias</h2><span class="eyebrow">entregas e parcelas</span></div>
         <div class="agenda" id="agenda"></div>
       </section>
+      <section class="card so-dono"><div class="card-h"><h2>Licença do TQS</h2><span class="eyebrow" id="tqsTxt"></span></div><div id="tqsBox" class="view"></div></section>
       <div class="row-end">
         <div class="chips" id="filtro"></div>
-        <div class="bar-actions"><button class="btn pri" id="novo">+ Novo projeto</button><button class="btn" id="lerBtn">Ler proposta</button><input type="file" id="lerIn" accept=".pdf,.docx,image/*,application/pdf" multiple hidden></div>
+        <div class="bar-actions"><button class="btn pri so-dono" id="novo">+ Novo projeto</button><button class="btn so-dono" id="lerBtn">Ler proposta</button><input type="file" id="lerIn" accept=".pdf,.docx,image/*,application/pdf" multiple hidden></div>
       </div>
       <section class="panel" id="propCard" hidden>
         <div class="card-h"><h2>Propostas lidas</h2><button class="btn sm" id="propFechar" type="button">Fechar</button></div>
@@ -56,7 +64,7 @@
         <div class="bar-actions"><button class="btn pri" id="propTodas" type="button" hidden>Cadastrar todas</button></div>
       </section>
       <div id="lista" class="view"></div>
-      <section class="card">
+      <section class="card so-dono">
         <div class="card-h"><h2>Relatório semanal</h2><span class="eyebrow" id="semPer"></span></div>
         <p class="note" id="semResumo"></p>
         <div class="bar-actions"><button class="btn sm pri" id="semPdf">Gerar PDF e arquivar</button><button class="btn sm" id="semTodos">PDF de todos os projetos</button></div>
@@ -66,7 +74,7 @@
 
     <!-- ===== FICHA DO PROJETO ===== -->
     <div class="view" id="vFicha" hidden>
-      <div class="row-end"><button class="btn sm" id="voltar">‹ Projetos</button><div class="bar-actions"><button class="btn sm" id="fPdf">PDF da ficha</button><button class="btn sm pri" id="fEditar">Editar</button></div></div>
+      <div class="row-end"><button class="btn sm" id="voltar">‹ Projetos</button><div class="bar-actions"><button class="btn sm" id="fPdf">PDF da ficha</button><button class="btn sm pri so-dono" id="fEditar">Editar</button></div></div>
       <section class="pp-hero" id="fHero"></section>
       <section class="card"><div class="card-h"><h2>Prazo do cálculo</h2><span class="eyebrow" id="fPrazoTxt"></span></div><div id="fPrazo" class="view"></div></section>
       <section class="card"><div class="card-h"><h2>Andamento</h2><span class="eyebrow" id="fPctTxt"></span></div><div class="pipeline" id="fPipe"></div><div id="fDisc" class="view"></div></section>

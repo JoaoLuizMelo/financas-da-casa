@@ -2,7 +2,7 @@
 // Mesmo Firebase e mesma conta do Alicerce; dados em users/{uid}/proj/{id} e relatórios em users/{uid}/projrel/{semana}.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc, query, where, arrayUnion, arrayRemove, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "../firebase-config.js";
 import { brl, parseValor, fmtIn, hojeISO, addDias, addMeses, difDias, dm } from "../nucleo.js";
 import { carregar, logoPdf, COR, JSPDF, AUTOTABLE } from "../balanco.js";
@@ -27,13 +27,14 @@ const FLUXO = ["orcamento", "negociacao", "fechado", "execucao", "entregue", "co
 const ATIVOS = ["fechado", "execucao", "entregue"];
 /* checklist estrutural montado a partir das respostas do projeto */
 const FUNDACOES = ["Sapatas isoladas", "Sapatas corridas", "Muros de contenção", "Blocos sobre estacas"];
-const CFG_PADRAO = { tqs: "alugar", fund: ["Sapatas isoladas"], npav: 1, coberta: true, rampa: false, rsup: true, rinf: false };
+const CFG_PADRAO = { tqs: "alugar", fund: ["Sapatas isoladas"], npav: 1, coberta: true, escada: false, rampa: false, piscina: false, rsup: true, rinf: false };
 const nomePav = (i, n) => n === 1 ? "Térreo" : i === 0 ? "Térreo" : `${i}º pavimento`;
 export function etapasEstrutural(cfg = CFG_PADRAO, sistema = "A definir") {
   const c = { ...CFG_PADRAO, ...cfg }, n = Math.max(1, Math.min(30, +c.npav || 1)), L = [];
   const pav = i => nomePav(i, n).toLowerCase(), cadaPav = txt => { for (let i = 0; i < n; i++) L.push(`${txt} ${pav(i)}`); };
   const fundacao = () => (c.fund.length ? c.fund : ["Fundação"]).forEach(f => L.push(`Fundação — detalhar ${f.toLowerCase()}`));
-  const extras = () => { if (c.rampa) L.push("Rampa — armação"); if (c.rsup) L.push("Reservatório superior"); if (c.rinf) L.push("Reservatório inferior"); };
+  const extras = () => { if (c.escada) L.push(/^Metálico$/.test(sistema) ? "Escada — detalhamento" : "Escada — armação"); if (c.rampa) L.push("Rampa — armação"); if (c.piscina) L.push("Piscina — armação");
+    if (c.rsup) L.push("Reservatório superior"); if (c.rinf) L.push("Reservatório inferior"); };
   if (c.tqs === "alugar") L.push("TQS — alugar licença");
   if (sistema === "Metálico") {
     L.push("Cálculo");
@@ -143,9 +144,10 @@ function renderImport() {
 }
 
 /* ===== estado ===== */
-let uid = null, nome = "", projs = [], rels = [], filtro = "ativos", aberto = null, edit = null, editId = null, semRef = null;
+let uid = null, nome = "", dono = null, donos = [], meuPerfil = {}, tqs = null, unsubProj = null, projs = [], rels = [], filtro = "ativos", aberto = null, edit = null, editId = null, semRef = null;
 const subs = [];
-const ref = id => doc(db, "users", uid, "proj", id);
+const ref = id => doc(db, "users", dono || uid, "proj", id);
+const ro = () => !!dono && dono !== uid;
 
 /* ===== cálculos ===== */
 export function resumo(p) {
@@ -169,6 +171,7 @@ const filtros = { ativos: p => ATIVOS.includes(p.status), propostas: p => ["orca
 /* ===== painel ===== */
 function render() {
   if (!uid) return;
+  document.body.classList.toggle("ro", ro()); renderDonos(); renderTqs(); renderShare();
   $("#whoName").textContent = nome ? `Olá, ${nome}` : "—"; $("#sairBtn").textContent = (nome[0] || "?").toUpperCase();
   if (aberto) { const p = projs.find(x => x.id === aberto); if (p && $("#vForm").hidden) renderFicha(p); else if (!p) fecharFicha(); }
   const ativos = projs.filter(filtros.ativos), prop = projs.filter(filtros.propostas);
@@ -183,6 +186,9 @@ function render() {
   const fl = $("#filtro"); fl.textContent = "";
   [["ativos", `Em andamento (${ativos.length})`], ["propostas", `Propostas (${prop.length})`], ["concluidos", "Concluídos"], ["perdidos", "Não fechados"], ["todos", "Todos"]].forEach(([id, n]) => {
     const b = el("button", "chip", n); b.setAttribute("aria-pressed", String(filtro === id)); b.onclick = () => { filtro = id; render(); }; fl.append(b); });
+  const vis = projs.filter(filtros[filtro]), todosAbertos = vis.length && vis.every(p => abertosCard.has(p.id));
+  const tg = el("button", "chip", todosAbertos ? "Recolher todos ▴" : "Expandir todos ▾"); tg.type = "button";
+  tg.onclick = () => { vis.forEach(p => todosAbertos ? abertosCard.delete(p.id) : abertosCard.add(p.id)); salvarAbertos(); render(); }; if (vis.length) fl.append(tg);
   const box = $("#lista"); box.textContent = "";
   const lst = projs.filter(filtros[filtro]).sort((a, b) => (a.prazo || "9999").localeCompare(b.prazo || "9999") || (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
   if (!lst.length) { const e = el("div", "empty"); e.append(el("strong", null, projs.length ? "Nenhum projeto neste filtro" : "Nenhum projeto cadastrado"), "Toque em “+ Novo projeto” para lançar os dados, o orçamento, o fechamento e as etapas."); box.append(e); }
@@ -204,16 +210,36 @@ function renderAgenda() {
     r.append(el("span", "ag-tag " + x.tag[0], x.tag[1]), Object.assign(el("div"), {}), el("span", "num", dd < 0 ? `${-dd}d atrás` : dd === 0 ? "hoje" : dm(x.d)));
     r.children[1].append(el("span", "d", x.t), el("span", "m", x.m)); r.style.cursor = "pointer"; r.onclick = () => abrirFicha(x.id); box.append(r); });
 }
+const abertosCard = new Set((() => { try { return JSON.parse(localStorage.getItem("proj-abertos") || "[]"); } catch (e) { return []; } })());
+const salvarAbertos = () => { try { localStorage.setItem("proj-abertos", JSON.stringify([...abertosCard])); } catch (e) {} };
 function cartao(p) {
-  const r = resumo(p), h = hojeISO(), c = el("section", "card pp");
-  const top = el("div", "pp-top"), t = el("button", "pp-tit"); t.type = "button"; t.onclick = () => abrirFicha(p.id);
-  t.append(el("h2", "pp-nome", p.nome), el("div", "pp-meta", [p.cliente, p.local].filter(Boolean).join(" · ") || "Toque para abrir a ficha"));
-  top.append(t, el("span", "st st-" + p.status, STN[p.status])); c.append(top);
-  /* checklist no próprio cartão: feito × falta */
+  const r = resumo(p), h = hojeISO(), aberto = abertosCard.has(p.id), c = el("section", "card pp" + (aberto ? " open" : ""));
+  const alternar = () => { aberto ? abertosCard.delete(p.id) : abertosCard.add(p.id); salvarAbertos(); render(); };
+  /* cabeçalho — toque para expandir/recolher */
+  const top = el("button", "pp-top pp-tog"); top.type = "button"; top.setAttribute("aria-expanded", String(aberto)); top.onclick = alternar;
+  const t = el("div", "pp-tit"); t.append(el("h2", "pp-nome", p.nome), el("div", "pp-meta", [p.cliente, p.local].filter(Boolean).join(" · ") || (p.disciplinas || []).map(d => d.d).join(", ")));
+  const dir = el("div", "pp-dir"); dir.append(el("span", "st st-" + p.status, STN[p.status]), el("span", "chev", "▾"));
+  top.append(t, dir); c.append(top);
+  /* resumo (sempre visível) */
+  const rs = el("div", "pp-res");
+  const bar = el("div", "mini"), bi = el("i"); bi.style.width = Math.round(r.pct * 100) + "%"; bar.append(bi);
+  const lin = el("div", "pp-res-l"); lin.append(el("span", null, r.total ? `${r.feitas} de ${r.total} etapas` + (r.proxEtapa[0] ? ` · próxima: ${r.proxEtapa[0].e.t}` : " · concluídas") : "Sem etapas"), el("span", "num", Math.round(r.pct * 100) + "%"));
+  rs.append(bar, lin); c.append(rs);
+  if (r.atrasadas.length) c.append(el("div", "pp-alert late", `${r.atrasadas.length} parcela(s) atrasada(s) — ${brl(r.atrasadas.reduce((s, x) => s + x.valor, 0))}`));
+  const sp = situacaoPrazo(p);
+  if (sp && !["entregue", "concluido"].includes(p.status)) c.append(el("div", "pp-alert " + (sp.cls || "info"), "⏱ " + sp.txt));
+  else if (!p.liberadoEm && ["fechado", "execucao"].includes(p.status)) { const lb = el("button", "pp-alert soon lib-btn", "Aguardando liberação para cálculo — tocar para liberar"); lb.type = "button"; lb.onclick = () => abrirFicha(p.id); c.append(lb); }
+  const f = el("div", "pp-foot");
+  const it = (a, b) => { const s = el("span", null, a + " "); s.append(el("b", null, b)); return s; };
+  f.append(it(["orcamento", "negociacao"].includes(p.status) ? "Orçado" : "Fechado", brl(r.fechado)), it("Falta receber", brl(r.aReceber)));
+  if (r.aPagar) f.append(it("A pagar prestadores", brl(r.aPagar)));
+  c.append(f);
+  if (!aberto) return c;
+  /* detalhe (expandido): checklist feito × falta, prestadores e acesso à ficha */
   (p.disciplinas || []).forEach((d, di) => {
-    const f = d.etapas.filter(e => e.ok).length, tt = d.etapas.length, box = el("div", "pp-chk");
-    const hd = el("div", "pp-chk-h"); hd.append(el("b", null, d.d + (d.sistema && d.sistema !== "A definir" ? ` · ${d.sistema}` : "")), el("span", "num", `${f}/${tt} feitas`));
-    const mi = el("div", "mini"), i = el("i"); i.style.width = (tt ? f / tt * 100 : 0) + "%"; mi.append(i);
+    const fe = d.etapas.filter(e => e.ok).length, tt = d.etapas.length, box = el("div", "pp-chk");
+    const hd = el("div", "pp-chk-h"); hd.append(el("b", null, d.d + (d.sistema && d.sistema !== "A definir" ? ` · ${d.sistema}` : "")), el("span", "num", `${fe}/${tt} feitas`));
+    const mi = el("div", "mini"), i = el("i"); i.style.width = (tt ? fe / tt * 100 : 0) + "%"; mi.append(i);
     box.append(hd, mi);
     const ul = el("ul", "pp-list");
     d.etapas.forEach((e, ei) => {
@@ -224,17 +250,14 @@ function cartao(p) {
     });
     box.append(ul); c.append(box);
   });
-  if (r.atrasadas.length) c.append(el("div", "pp-alert late", `${r.atrasadas.length} parcela(s) atrasada(s) — ${brl(r.atrasadas.reduce((s, x) => s + x.valor, 0))}`));
-  const sp = situacaoPrazo(p);
-  if (sp && !["entregue", "concluido"].includes(p.status)) c.append(el("div", "pp-alert " + (sp.cls || "info"), "⏱ " + sp.txt));
-  else if (!p.liberadoEm && ["fechado", "execucao"].includes(p.status)) { const lb = el("button", "pp-alert soon lib-btn", "Aguardando liberação para cálculo — tocar para liberar"); lb.type = "button"; lb.onclick = () => abrirFicha(p.id); c.append(lb); }
-  const f = el("div", "pp-foot");
-  const it = (a, b) => { const s = el("span", null, a + " "); s.append(el("b", null, b)); return s; };
-  f.append(it(["orcamento", "negociacao"].includes(p.status) ? "Orçado" : "Fechado", brl(r.fechado)), it("Recebido", brl(r.recebido)), it("Falta receber", brl(r.aReceber)));
-  (p.prestadores || []).forEach(x => { const pago = (x.pagamentos || []).filter(y => y.pago).reduce((s, y) => s + y.valor, 0); f.append(it(`${x.nome} (${x.disc})`, `pago ${brl(pago)} de ${brl(x.valor)}`)); });
-  if (r.custo) f.append(it("Margem", `${brl(r.margem)} · ${Math.round(r.margemPct * 100)}%`));
-  c.append(f);
-  const ab = el("button", "btn sm pri pp-abrir", "Abrir ficha completa ›"); ab.type = "button"; ab.onclick = () => abrirFicha(p.id); c.append(ab);
+  const f2 = el("div", "pp-foot");
+  f2.append(it("Recebido", brl(r.recebido)));
+  (p.prestadores || []).forEach(x => { const pago = (x.pagamentos || []).filter(y => y.pago).reduce((s, y) => s + y.valor, 0); f2.append(it(`${x.nome} (${x.disc})`, `pago ${brl(pago)} de ${brl(x.valor)}`)); });
+  if (r.custo) f2.append(it("Margem", `${brl(r.margem)} · ${Math.round(r.margemPct * 100)}%`));
+  c.append(f2);
+  const acts = el("div", "bar-actions pp-acts"), ab = el("button", "btn sm pri", "Abrir ficha completa ›"); ab.type = "button"; ab.onclick = () => abrirFicha(p.id);
+  const rc = el("button", "btn sm", "Recolher ▴"); rc.type = "button"; rc.onclick = alternar;
+  acts.append(ab, rc); c.append(acts);
   return c;
 }
 
@@ -288,6 +311,7 @@ function renderPrazo(p) {
 function abrirFicha(id) { aberto = id; ["#vLista", "#vForm"].forEach(s => $(s).hidden = true); $("#vFicha").hidden = false; render(); scrollTo({ top: 0 }); }
 function fecharFicha() { aberto = null; $("#vFicha").hidden = true; $("#vForm").hidden = true; $("#vLista").hidden = false; render(); }
 async function salvarParcial(p, mud, log) {
+  if (ro() && Object.keys(mud).length) { toast("Somente visualização: você pode registrar anotações."); return; }
   const hist = (p.historico || []).concat(log ? [{ d: agoraISO(), t: log }] : []);
   try { await updateDoc(ref(p.id), { ...mud, historico: hist, atualizadoEm: Date.now() }); } catch (e) { falha(e); }
 }
@@ -361,7 +385,8 @@ function renderFicha(p) {
   hs.forEach(x => { const li = el("li"); li.append(el("time", null, x.d.slice(8, 10) + "/" + x.d.slice(5, 7) + " " + x.d.slice(11)), el("span", null, x.t)); hl.append(li); });
   $("#fEditar").onclick = () => abrirForm(p);
   $("#fPdf").onclick = () => pdfProjetos([p]).catch(falha);
-  $("#fNotaAdd").onclick = () => { const v = $("#fNota").value.trim(); if (!v) return; $("#fNota").value = ""; salvarParcial(p, {}, "Anotação: " + v); };
+  $("#fNotaAdd").onclick = () => { const v = $("#fNota").value.trim(); if (!v) return; $("#fNota").value = ""; salvarParcial(p, {}, `Anotação${ro() ? " (" + nome + ")" : ""}: ` + v); };
+  sel.disabled = ro();
 }
 $("#voltar").onclick = fecharFicha;
 
@@ -434,7 +459,8 @@ function configEstrutural(d) {
   const np = el("input"); np.type = "number"; np.min = 1; np.max = 30; np.value = cf.npav; np.onchange = () => { cf.npav = Math.max(1, Math.min(30, parseInt(np.value) || 1)); regen(); };
   q("4. Quantos pavimentos? (gera vigas e lajes de cada pavimento)", np);
   const sn = (rot, k) => q(rot, sel([["1", "Sim"], ["0", "Não"]], cf[k] ? "1" : "0", v => { cf[k] = v === "1"; regen(); }));
-  sn("5. Tem elementos de coberta (vigas e lajes)?", "coberta"); sn("6. Tem rampa?", "rampa"); sn("7. Tem reservatório superior?", "rsup"); sn("8. Tem reservatório inferior?", "rinf");
+  sn("5. Tem elementos de coberta (vigas e lajes)?", "coberta"); sn("6. Tem escada?", "escada"); sn("7. Tem rampa?", "rampa"); sn("8. Tem piscina?", "piscina");
+  sn("9. Tem reservatório superior?", "rsup"); sn("10. Tem reservatório inferior?", "rinf");
   box.append(el("p", "note", `Checklist gerado: ${d.etapas.length} etapas. Você ainda pode renomear, excluir ou incluir etapas abaixo.`));
   return box;
 }
@@ -679,6 +705,62 @@ async function pdfSemana(r) {
   k.fim(`Alicerce Proj · Relatório semanal ${dBR(r.ini)} a ${dBR(r.fim)}`, `Alicerce-Proj-semana-${r.ini}.pdf`);
 }
 
+/* ===== projetos compartilhados (somente leitura + anotações) ===== */
+function assinarProjs() {
+  unsubProj?.(); projs = []; aberto = null; ["#vFicha", "#vForm"].forEach(s => $(s).hidden = true); $("#vLista").hidden = false;
+  unsubProj = onSnapshot(collection(db, "users", dono, "proj"), s => { projs = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, e => { console.error(e); toast("Sem acesso a estes projetos."); });
+}
+function renderDonos() {
+  const box = $("#donos"); box.textContent = ""; box.hidden = !donos.length;
+  if (!donos.length) return;
+  [{ uid, nome: "Meus projetos" }, ...donos.map(d => ({ uid: d.uid, nome: `Projetos de ${d.nome}` }))].forEach(d => {
+    const b = el("button", "chip", d.nome); b.type = "button"; b.setAttribute("aria-pressed", String((dono || uid) === d.uid));
+    b.onclick = () => { if (dono === d.uid) return; dono = d.uid; assinarProjs(); render(); }; box.append(b); });
+  if (ro()) box.append(el("span", "note", "Somente visualização — você pode registrar anotações na ficha."));
+}
+document.addEventListener("click", e => { if (ro() && e.target.matches?.('input[type="checkbox"]') && e.target.closest("#lista,#vFicha")) { e.preventDefault(); toast("Somente visualização: só o responsável marca etapas e pagamentos."); } }, true);
+const emailKey = e => String(e || "").trim().toLowerCase();
+function renderShare() {
+  const box = $("#shList"); if (!box) return; box.textContent = "";
+  const ids = meuPerfil.projCom || [], nomes = meuPerfil.projComNomes || {};
+  if (!ids.length) box.append(el("p", "note", "Ninguém vê seus projetos ainda."));
+  ids.forEach(u => { const r = el("div", "share-row"); r.append(el("span", null, nomes[u] || "Pessoa")); const b = el("button", "btn sm danger", "Parar de compartilhar"); b.type = "button";
+    armar(b, "Parar de compartilhar", async () => { try { await updateDoc(doc(db, "users", uid), { projCom: arrayRemove(u), [`projComNomes.${u}`]: deleteField() }); } catch (e) { falha(e); } }); r.append(b); box.append(r); });
+}
+$("#shBtn").onclick = () => { $("#shPanel").hidden = !$("#shPanel").hidden; };
+$("#shFechar").onclick = () => $("#shPanel").hidden = true;
+$("#shAdd").onclick = async () => {
+  const e = emailKey($("#shEmail").value); if (!e.includes("@")) { toast("Informe um e-mail válido."); return; }
+  try { const s = await getDoc(doc(db, "perfis", e)); if (!s.exists()) { toast("Não há conta com esse e-mail. Peça para a pessoa criar a conta no Alicerce primeiro."); return; }
+    const p = s.data(); if (p.uid === uid) { toast("Esse é o seu e-mail."); return; }
+    await updateDoc(doc(db, "users", uid), { projCom: arrayUnion(p.uid), [`projComNomes.${p.uid}`]: p.nome || "Pessoa" }); $("#shEmail").value = ""; toast(`${p.nome || "A pessoa"} agora vê seus projetos (somente leitura e anotações).`);
+  } catch (x) { falha(x); }
+};
+
+/* ===== licença do TQS (custo mensal) ===== */
+const mesAtual = () => hojeISO().slice(0, 7), nomeMes = m => ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][+m.slice(5) - 1] + "/" + m.slice(2, 4);
+async function salvarTqs(d) { try { await setDoc(doc(db, "users", uid, "projcfg", "tqs"), d); } catch (e) { falha(e); } }
+function renderTqs() {
+  const box = $("#tqsBox"); if (!box || ro()) return; box.textContent = "";
+  const t = tqs || { valor: 0, meses: [] }, M = mesAtual(), ano = M.slice(0, 4);
+  const doMes = t.meses.find(x => x.m === M), anoPago = t.meses.filter(x => x.m.startsWith(ano) && x.pago).reduce((s, x) => s + x.valor, 0);
+  const usando = projs.filter(p => ["fechado", "execucao"].includes(p.status) && (p.disciplinas || []).some(d => d.config?.tqs === "alugar" && d.etapas.some(e => !e.ok))).length;
+  $("#tqsTxt").textContent = doMes ? (doMes.pago ? `${nomeMes(M)} pago` : `${nomeMes(M)} a pagar`) : "mês atual não registrado";
+  const top = el("div", "tqs-top"), lv = el("label", "f"), iv = el("input", "valor"); iv.inputMode = "decimal"; iv.placeholder = "0,00"; iv.value = t.valor ? fmtIn(t.valor) : ""; lv.append("Mensalidade (R$)", iv);
+  const sv = el("button", "btn sm", "Salvar valor"); sv.type = "button"; sv.onclick = () => salvarTqs({ ...t, valor: parseValor(iv.value) || 0 });
+  const reg = el("button", "btn sm pri", doMes ? "Mês atual registrado ✓" : `Registrar ${nomeMes(M)}`); reg.type = "button"; reg.disabled = !!doMes;
+  reg.onclick = () => { const v = parseValor(iv.value) || t.valor; if (!v) { toast("Informe a mensalidade do TQS."); iv.focus(); return; } salvarTqs({ valor: v, meses: [...t.meses, { m: M, valor: v, pago: false }].sort((a, b) => b.m.localeCompare(a.m)) }); };
+  top.append(lv, sv, reg); box.append(top);
+  box.append(el("p", "note", `Pago em ${ano}: ${brl(anoPago)} · ${usando} projeto(s) ativo(s) usando TQS alugado.${t.valor && usando ? ` Rateio do mês: ${brl(Math.round(t.valor / usando))} por projeto.` : ""}`));
+  const ul = el("div", "tqs-list");
+  t.meses.slice(0, 12).forEach((x, i) => { const row = el("div", "parc" + (x.pago ? " ok" : "")), cb = el("input", "ck"); cb.type = "checkbox"; cb.checked = !!x.pago; cb.setAttribute("aria-label", "Pago");
+    cb.onchange = () => { const ms = JSON.parse(JSON.stringify(t.meses)); ms[i].pago = cb.checked; ms[i].pagoEm = cb.checked ? hojeISO() : null; salvarTqs({ ...t, meses: ms }); };
+    const tx = el("div"); tx.append(el("div", "d", `TQS — ${nomeMes(x.m)}`), el("div", "m", x.pago ? `Pago${x.pagoEm ? " em " + dBR(x.pagoEm) : ""}` : "A pagar"));
+    const rm = el("button", "x", "×"); rm.type = "button"; rm.title = "Remover mês"; rm.onclick = () => salvarTqs({ ...t, meses: t.meses.filter((_, j) => j !== i) });
+    const v = el("span", "v", brl(x.valor)); v.append(rm); row.append(cb, tx, v); ul.append(row); });
+  box.append(ul);
+}
+
 /* ===== login ===== */
 const ERROS = { "auth/invalid-credential": "E-mail ou senha incorretos.", "auth/wrong-password": "E-mail ou senha incorretos.", "auth/user-not-found": "E-mail ou senha incorretos.", "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos.", "auth/network-request-failed": "Sem conexão com a internet." };
 $("#authForm").addEventListener("submit", async ev => { ev.preventDefault(); $("#aErr").hidden = true; $("#aBtn").disabled = true;
@@ -687,11 +769,14 @@ $("#authForm").addEventListener("submit", async ev => { ev.preventDefault(); $("
 $("#aEsqueci").onclick = async () => { const e = $("#aEmail").value.trim(); if (!e) { toast("Digite seu e-mail no campo acima."); return; } try { await sendPasswordResetEmail(auth, e); toast("Enviamos o link para o seu e-mail."); } catch (x) { toast("Não foi possível enviar o link."); } };
 armar($("#sairBtn"), "Sair", () => signOut(auth));
 onAuthStateChanged(auth, async u => {
-  subs.splice(0).forEach(f => f()); projs = []; rels = []; aberto = null;
+  subs.splice(0).forEach(f => f()); unsubProj?.(); unsubProj = null; projs = []; rels = []; aberto = null; donos = []; dono = null; meuPerfil = {}; tqs = null;
   if (!u) { uid = null; $("#app").hidden = true; $("#auth").hidden = false; return; }
   uid = u.uid; $("#auth").hidden = true; $("#app").hidden = false;
   try { const s = await getDoc(doc(db, "users", uid)); nome = s.data()?.nome || u.displayName || u.email.split("@")[0]; } catch (e) { nome = u.displayName || ""; }
-  subs.push(onSnapshot(collection(db, "users", uid, "proj"), s => { projs = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, e => console.error(e)));
+  dono = uid; assinarProjs();
+  subs.push(onSnapshot(doc(db, "users", uid), s => { meuPerfil = s.data() || {}; render(); }, e => console.error(e)));
+  subs.push(onSnapshot(query(collection(db, "users"), where("projCom", "array-contains", uid)), s => { donos = s.docs.map(d => ({ uid: d.id, nome: d.data().nome || "Outra pessoa" })); if (dono !== uid && !donos.some(x => x.uid === dono)) { dono = uid; assinarProjs(); } render(); }, e => console.error(e)));
+  subs.push(onSnapshot(doc(db, "users", uid, "projcfg", "tqs"), s => { tqs = s.data() || null; render(); }, e => console.error(e)));
   subs.push(onSnapshot(collection(db, "users", uid, "projrel"), s => { rels = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.id.localeCompare(a.id)); render(); }, e => console.error(e)));
   render();
 });

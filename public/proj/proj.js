@@ -385,6 +385,7 @@ function renderFicha(p) {
   hs.forEach(x => { const li = el("li"); li.append(el("time", null, x.d.slice(8, 10) + "/" + x.d.slice(5, 7) + " " + x.d.slice(11)), el("span", null, x.t)); hl.append(li); });
   $("#fEditar").onclick = () => abrirForm(p);
   $("#fPdf").onclick = () => pdfProjetos([p]).catch(falha);
+  $("#fPdfC").onclick = () => pdfProjetos([p], true).catch(falha);
   $("#fNotaAdd").onclick = () => { const v = $("#fNota").value.trim(); if (!v) return; $("#fNota").value = ""; salvarParcial(p, {}, `Anotação${ro() ? " (" + nome + ")" : ""}: ` + v); };
   sel.disabled = ro();
 }
@@ -604,7 +605,7 @@ function montarSemana(ini) {
   });
   const ate = addDias(hojeISO(), 15), venc = [];
   projs.forEach(p => (p.parcelas || []).forEach(x => { if (!x.pago && x.venc && x.venc <= ate && p.status !== "perdido") venc.push({ data: x.venc, proj: p.nome, desc: x.desc || "Parcela", valor: x.valor }); }));
-  const ativos = projs.filter(p => ["orcamento", "negociacao", ...ATIVOS].includes(p.status)).map(p => { const r = resumo(p); return { nome: p.nome, cliente: p.cliente || "", status: STN[p.status], pct: Math.round(r.pct * 100), prox: r.proxEtapa.map(x => `${x.d}: ${x.e.t}`).join(" · "), prazo: p.prazo || "", fechado: r.fechado, aReceber: r.aReceber }; });
+  const ativos = projs.filter(p => ["orcamento", "negociacao", ...ATIVOS].includes(p.status)).map(p => { const r = resumo(p); return { nome: p.nome, cliente: p.cliente || "", status: STN[p.status], pct: Math.round(r.pct * 100), prox: r.proxEtapa.map(x => `${x.d}: ${x.e.t}`).join(" · "), prazo: p.prazo || "", fechado: r.fechado, aReceber: r.aReceber, aPagar: r.aPagar }; });
   const s = a => a.sort((x, y) => x.data.localeCompare(y.data));
   return { id: ini, ini, fim, nome, etapas: s(etapas), receb: s(receb), mov: s(mov), venc: s(venc), pagos: s(pagos), totalPagos: pagos.reduce((t, x) => t + x.valor, 0), projetos: ativos, totalReceb: receb.reduce((t, x) => t + x.valor, 0) };
 }
@@ -674,35 +675,52 @@ function fichaPdf(k, p) {
       { columnStyles: { 4: { halign: "right", fontStyle: "bold" } } }); }
   if (p.obs) { k.fonte("italic", 8.5); k.cor(COR.texto); const l = pdf.splitTextToSize("Obs.: " + p.obs, CW); k.espaco(l.length * 4); pdf.text(l, M, k.y); k.y += l.length * 4 + 4; }
 }
-async function pdfProjetos(lista) {
+/* PDF resumido (padrão): uma linha por projeto na carteira; ficha de uma página */
+function fichaResumo(k, p) {
+  const { pdf, M, CW, W } = k, r = resumo(p), sp = situacaoPrazo(p);
+  k.titulo(p.nome, STN[p.status]);
+  k.fonte("normal", 8.5); k.cor(COR.suave); pdf.text([p.cliente, p.local, p.tipologia].filter(Boolean).join("  ·  ") || " ", M, k.y); k.y += 6;
+  k.tabela(["FECHADO", "RECEBIDO", "A RECEBER", ...(r.custo ? ["PRESTADORES", "MARGEM"] : []), "PRAZO"],
+    [[brl(r.fechado), brl(r.recebido), brl(r.aReceber), ...(r.custo ? [brl(r.custo), `${Math.round(r.margemPct * 100)}%`] : []), sp ? sp.txt.replace(/^.*entrega /, "") : p.liberadoEm ? "—" : "aguardando liberação"]],
+    { styles: { fontSize: 8.6, fontStyle: "bold", textColor: COR.grafite, cellPadding: 2 } });
+  k.tabela(["DISCIPLINA", "VALOR", "ANDAMENTO", "PRÓXIMA ETAPA"], (p.disciplinas || []).map(d => { const f = d.etapas.filter(e => e.ok).length; return [d.d + (d.sistema && d.sistema !== "A definir" ? ` (${d.sistema.split(" ")[0]})` : ""), d.valor ? brl(d.valor) : "—", `${f}/${d.etapas.length}`, d.etapas.find(e => !e.ok)?.t || "Concluída"]; }),
+    { columnStyles: { 1: { halign: "right" }, 2: { halign: "center", cellWidth: 24 } } });
+  const prs = p.prestadores || [];
+  if (prs.length) k.tabela(["TERCEIRIZADO", "DISCIPLINA", "VALOR", "PAGO", "A PAGAR"], prs.map(x => { const pg = (x.pagamentos || []).filter(y => y.pago).reduce((s, y) => s + y.valor, 0); return [x.nome, x.disc, brl(x.valor), brl(pg), brl(x.valor - pg)]; }),
+    { columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right", fontStyle: "bold", textColor: COR.vermelho } } });
+}
+async function pdfProjetos(lista, completo = false) {
   const um = lista.length === 1;
   const k = await iniciarPdf(um ? "Ficha do projeto" : "Carteira de projetos", um ? (lista[0].cliente || "") : `${lista.length} projetos`, `${nome} · ${new Date().toLocaleDateString("pt-BR")}`);
-  if (!um) { const rs = lista.map(resumo);
-    k.titulo("Visão geral");
-    k.tabela(["PROJETO", "CLIENTE", "SITUAÇÃO", "ANDAMENTO", "FECHADO", "A RECEBER"], lista.map((p, i) => [p.nome, p.cliente || "—", STN[p.status], `${Math.round(rs[i].pct * 100)}%`, brl(rs[i].fechado), brl(rs[i].aReceber)]),
-      { columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right", fontStyle: "bold" } }, foot: [["Total", "", "", "", brl(rs.reduce((s, r) => s + r.fechado, 0)), brl(rs.reduce((s, r) => s + r.aReceber, 0))]],
+  if (um) { completo ? fichaPdf(k, lista[0]) : fichaResumo(k, lista[0]); }
+  else {
+    const rs = lista.map(resumo);
+    const sum = f => rs.reduce((s, r) => s + r[f], 0), terc = p => (p.prestadores || []).map(x => x.nome).join(", ");
+    k.tabela(["PROJETO", "SITUAÇÃO", "ANDAM.", "ENTREGA", "FECHADO", "A RECEBER", "TERCEIRIZADO", "A PAGAR", "MARGEM"],
+      lista.map((p, i) => [p.nome + (terc(p) ? "\n" + terc(p) : ""), STN[p.status], `${Math.round(rs[i].pct * 100)}%`, p.prazo ? dm(p.prazo) : "—", brl(rs[i].fechado), brl(rs[i].aReceber),
+        rs[i].custo ? brl(rs[i].custo) : "—", rs[i].custo ? brl(rs[i].aPagar) : "—", rs[i].fechado ? `${Math.round(rs[i].margemPct * 100)}%` : "—"]),
+      { styles: { fontSize: 7.4, cellPadding: { top: 1.6, bottom: 1.6, left: 1.6, right: 1.6 } }, headStyles: { fontSize: 6.6 },
+        columnStyles: { 2: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right", fontStyle: "bold" }, 6: { halign: "right" }, 7: { halign: "right", fontStyle: "bold", textColor: COR.vermelho }, 8: { halign: "right" } },
+        didParseCell: c => { if (c.section === "body" && c.column.index === 0 && c.cell.raw.includes("\n")) c.cell.styles.fontStyle = "normal"; },
+        foot: [["Total", "", "", "", brl(sum("fechado")), brl(sum("aReceber")), brl(sum("custo")), brl(sum("aPagar")), sum("fechado") ? `${Math.round((sum("fechado") - sum("custo")) / sum("fechado") * 100)}%` : "—"]],
         footStyles: { fontStyle: "bold", textColor: COR.grafite, lineWidth: { top: 0.4 }, lineColor: COR.grafite, halign: "right" } });
-    k.pdf.addPage(); k.y = 18; }
-  lista.forEach((p, i) => { if (i) { k.pdf.addPage(); k.y = 18; } fichaPdf(k, p); });
+    if (sum("custo")) { k.fonte("normal", 8); k.cor(COR.suave); k.pdf.text(`Saldo líquido previsto (a receber - a pagar a terceirizados): ${brl(sum("aReceber") - sum("aPagar"))}`, k.M, k.y); k.y += 5; }
+  }
   const slug = (um ? lista[0].nome : "carteira").normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   k.fim(`Alicerce Proj · ${um ? lista[0].nome : "Carteira de projetos"}`, `Alicerce-Proj-${slug}.pdf`);
 }
 async function pdfSemana(r) {
-  const k = await iniciarPdf("Relatório semanal", `${dBR(r.ini)} a ${dBR(r.fim)}`, `${r.nome || nome} · ${r.arquivadoEm ? "arquivado em " + new Date(r.arquivadoEm).toLocaleDateString("pt-BR") : "gerado em " + new Date().toLocaleDateString("pt-BR")}`);
-  k.titulo("Etapas concluídas na semana", String(r.etapas.length));
-  r.etapas.length ? k.tabela(["DATA", "PROJETO", "DISCIPLINA", "ETAPA"], r.etapas.map(e => [dm(e.data), e.proj, e.disc, e.etapa]), { columnStyles: { 0: { cellWidth: 14, textColor: COR.suave } } }) : k.vazio("Nenhuma etapa concluída nesta semana.");
-  k.titulo("Recebimentos da semana", brl(r.totalReceb));
-  r.receb.length ? k.tabela(["DATA", "PROJETO", "DESCRIÇÃO", "VALOR"], r.receb.map(x => [dm(x.data), x.proj, x.desc, brl(x.valor)]), { columnStyles: { 0: { cellWidth: 14, textColor: COR.suave }, 3: { halign: "right", fontStyle: "bold", textColor: COR.verde } } }) : k.vazio("Nenhum recebimento nesta semana.");
-  if (r.pagos) { k.titulo("Pagamentos a prestadores na semana", brl(r.totalPagos || 0));
-    r.pagos.length ? k.tabela(["DATA", "PROJETO", "PRESTADOR / PARCELA", "VALOR"], r.pagos.map(x => [dm(x.data), x.proj, x.desc, brl(x.valor)]), { columnStyles: { 0: { cellWidth: 14, textColor: COR.suave }, 3: { halign: "right", fontStyle: "bold", textColor: COR.vermelho } } }) : k.vazio("Nenhum pagamento a prestadores nesta semana."); }
-  k.titulo("Movimentações");
-  r.mov.length ? k.tabela(["DATA", "PROJETO", "REGISTRO"], r.mov.map(x => [dm(x.data), x.proj, x.t]), { columnStyles: { 0: { cellWidth: 14, textColor: COR.suave } } }) : k.vazio("Nenhuma movimentação registrada.");
-  k.titulo("Parcelas a vencer (15 dias) e atrasadas");
-  r.venc.length ? k.tabela(["VENCIMENTO", "PROJETO", "DESCRIÇÃO", "VALOR"], r.venc.map(x => [dm(x.data), x.proj, x.desc, brl(x.valor)]), { columnStyles: { 0: { cellWidth: 20 }, 3: { halign: "right", fontStyle: "bold" } } }) : k.vazio("Nada a vencer.");
-  k.titulo("Situação dos projetos");
-  r.projetos.length ? k.tabela(["PROJETO", "SITUAÇÃO", "ANDAMENTO", "PRÓXIMA ETAPA", "PRAZO", "A RECEBER"], r.projetos.map(p => [p.nome + (p.cliente ? "\n" + p.cliente : ""), p.status, p.pct + "%", p.prox || "—", dBR(p.prazo), brl(p.aReceber)]),
-    { columnStyles: { 2: { halign: "right" }, 5: { halign: "right", fontStyle: "bold" } } }) : k.vazio("Nenhum projeto em andamento.");
-  k.fim(`Alicerce Proj · Relatório semanal ${dBR(r.ini)} a ${dBR(r.fim)}`, `Alicerce-Proj-semana-${r.ini}.pdf`);
+  const k = await iniciarPdf("Relatório semanal", `${dBR(r.ini)} a ${dBR(r.fim)}`, `${r.nome || nome} · ${new Date(r.arquivadoEm || Date.now()).toLocaleDateString("pt-BR")}`);
+  const kw = (k.CW - 9) / 4, itens = [["ETAPAS CONCLUÍDAS", String(r.etapas.length), COR.petroleo], ["RECEBIDO", brl(r.totalReceb || 0), COR.verde], ["PAGO A PRESTADORES", brl(r.totalPagos || 0), COR.vermelho], ["A VENCER (15 DIAS)", String(r.venc.length), COR.amarelo]];
+  itens.forEach(([t, v, c], i) => { const x = k.M + i * (kw + 3); k.fill(COR.fundo); k.pdf.roundedRect(x, k.y, kw, 16, 2, 2, "F"); k.fill(c); k.pdf.rect(x, k.y + 3, 0.9, 10, "F");
+    k.fonte("bold", 6.4); k.cor(COR.suave); k.pdf.text(t, x + 4, k.y + 6); k.fonte("bold", 10.5); k.cor(c); k.pdf.text(v, x + 4, k.y + 12.5); });
+  k.y += 22;
+  if (r.etapas.length) { k.titulo("O que avançou"); k.tabela(["DATA", "PROJETO", "ETAPA"], r.etapas.map(e => [dm(e.data), e.proj, `${e.disc}: ${e.etapa}`]), { columnStyles: { 0: { cellWidth: 14, textColor: COR.suave } } }); }
+  if (r.venc.length) { k.titulo("A receber nos próximos 15 dias"); k.tabela(["DATA", "PROJETO", "VALOR"], r.venc.map(x => [dm(x.data), `${x.proj} — ${x.desc}`, brl(x.valor)]), { columnStyles: { 0: { cellWidth: 14 }, 2: { halign: "right", fontStyle: "bold" } } }); }
+  k.titulo("Projetos em andamento");
+  r.projetos.length ? k.tabela(["PROJETO", "ANDAMENTO", "ENTREGA", "A RECEBER", "A PAGAR TERCEIRIZADO"], r.projetos.map(p => [p.nome, p.pct + "%", p.prazo ? dm(p.prazo) : "—", brl(p.aReceber), p.aPagar ? brl(p.aPagar) : "—"]),
+    { columnStyles: { 1: { halign: "right" }, 3: { halign: "right", fontStyle: "bold" }, 4: { halign: "right", textColor: COR.vermelho } } }) : k.vazio("Nenhum projeto em andamento.");
+  k.fim(`Alicerce Proj · Semana ${dBR(r.ini)} a ${dBR(r.fim)}`, `Alicerce-Proj-semana-${r.ini}.pdf`);
 }
 
 /* ===== projetos compartilhados (somente leitura + anotações) ===== */

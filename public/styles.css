@@ -59,8 +59,8 @@ button:disabled{cursor:default;opacity:.5}
 .who b{color:var(--fg)}
 
 /* ===== abas ===== */
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:relative}
-.tabs button{border:0;background:transparent;border-radius:9px;padding:10px 4px;font-weight:600;color:var(--muted);font-size:.9rem;transition:color .15s,background .2s}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:relative}
+.tabs button{border:0;background:transparent;border-radius:9px;padding:10px 2px;font-weight:600;color:var(--muted);font-size:clamp(.74rem,2.6vw,.9rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s,background .2s}
 .tabs button:hover{color:var(--fg)}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
@@ -301,3 +301,4 @@ label.f input.valor{font-family:var(--mono);font-size:1.08rem}
   @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+

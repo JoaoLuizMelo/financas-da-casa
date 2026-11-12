@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Alicerce Proj</title>
+<meta name="description" content="Alicerce Proj — gestão de projetos estruturais, elétricos e hidrossanitários.">
+<meta name="theme-color" content="#0b1214">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Alicerce Proj">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="proj.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN (mesma conta do Alicerce) -->
+  <div class="auth" id="auth" hidden>
+    <form class="card" id="authForm" autocomplete="on">
+      <div class="auth-brand"><img class="auth-logo" src="../monograma.png" alt=""><b>ALICERCE PROJ</b><span>Gestão de projetos — use a mesma conta do Alicerce</span></div>
+      <label class="f">E-mail<input id="aEmail" type="email" autocomplete="email" required></label>
+      <label class="f">Senha<input id="aSenha" type="password" autocomplete="current-password" required minlength="6"></label>
+      <p class="err" id="aErr" hidden></p>
+      <button class="btn pri" type="submit" id="aBtn">Entrar</button>
+      <div class="links"><a class="linkbtn" href="../">Criar conta no Alicerce</a><button type="button" class="linkbtn" id="aEsqueci">Esqueci a senha</button></div>
+    </form>
+  </div>
+
+  <div id="app" class="view" hidden>
+    <header class="brandbar">
+      <div class="brand"><img class="brand-logo" src="../monograma.png" alt=""><div class="brand-txt"><b>Alicerce Proj</b><span id="whoName">—</span></div></div>
+      <div class="bar-actions"><a class="btn sm" href="../" title="Abrir o Alicerce financeiro">Finanças ↗</a><button class="avatar" id="sairBtn" title="Sair da conta">—</button></div>
+    </header>
+
+    <!-- ===== LISTA ===== -->
+    <div class="view" id="vLista">
+      <section class="pp-kpis" id="kpis"></section>
+      <section class="card" id="agendaCard">
+        <div class="card-h"><h2>Próximos 15 dias</h2><span class="eyebrow">entregas e parcelas</span></div>
+        <div class="agenda" id="agenda"></div>
+      </section>
+      <div class="row-end">
+        <div class="chips" id="filtro"></div>
+        <div class="bar-actions"><button class="btn pri" id="novo">+ Novo projeto</button><button class="btn" id="lerBtn">Ler proposta</button><input type="file" id="lerIn" accept=".pdf,.docx,image/*,application/pdf" multiple hidden></div>
+      </div>
+      <section class="panel" id="propCard" hidden>
+        <div class="card-h"><h2>Propostas lidas</h2><button class="btn sm" id="propFechar" type="button">Fechar</button></div>
+        <p class="note" id="propMsg"></p>
+        <div id="propList" class="view"></div>
+        <div class="bar-actions"><button class="btn pri" id="propTodas" type="button" hidden>Cadastrar todas</button></div>
+      </section>
+      <div id="lista" class="view"></div>
+      <section class="card">
+        <div class="card-h"><h2>Relatório semanal</h2><span class="eyebrow" id="semPer"></span></div>
+        <p class="note" id="semResumo"></p>
+        <div class="bar-actions"><button class="btn sm pri" id="semPdf">Gerar PDF e arquivar</button><button class="btn sm" id="semTodos">PDF de todos os projetos</button></div>
+        <div class="arq" id="relList"></div>
+      </section>
+    </div>
+
+    <!-- ===== FICHA DO PROJETO ===== -->
+    <div class="view" id="vFicha" hidden>
+      <div class="row-end"><button class="btn sm" id="voltar">‹ Projetos</button><div class="bar-actions"><button class="btn sm" id="fPdf">PDF da ficha</button><button class="btn sm pri" id="fEditar">Editar</button></div></div>
+      <section class="pp-hero" id="fHero"></section>
+      <section class="card"><div class="card-h"><h2>Prazo do cálculo</h2><span class="eyebrow" id="fPrazoTxt"></span></div><div id="fPrazo" class="view"></div></section>
+      <section class="card"><div class="card-h"><h2>Andamento</h2><span class="eyebrow" id="fPctTxt"></span></div><div class="pipeline" id="fPipe"></div><div id="fDisc" class="view"></div></section>
+      <section class="card"><div class="card-h"><h2>Orçamento e fechamento</h2></div><div class="pp-grid" id="fOrc"></div></section>
+      <section class="card"><div class="card-h"><h2>Parcelas</h2><span class="eyebrow" id="fParcTxt"></span></div><div id="fParc"></div></section>
+      <section class="card"><div class="card-h"><h2>Pagamentos a prestadores</h2><span class="eyebrow" id="fPrestTxt"></span></div><div id="fPrest" class="view"></div></section>
+      <section class="card"><div class="card-h"><h2>Dados do projeto</h2></div><div class="pp-grid" id="fDados"></div></section>
+      <section class="card"><div class="card-h"><h2>Histórico</h2></div><ol class="hist" id="fHist"></ol>
+        <div class="inline"><input id="fNota" maxlength="160" placeholder="Registrar uma anotação (ex.: cliente pediu revisão da laje)"><button class="btn sm" id="fNotaAdd">Anotar</button></div></section>
+    </div>
+
+    <!-- ===== FORMULÁRIO ===== -->
+    <form class="view" id="vForm" hidden autocomplete="off">
+      <div class="row-end"><button type="button" class="btn sm" id="cancelar">‹ Cancelar</button><h2 id="formTit">Novo projeto</h2></div>
+      <div class="aviso" id="formAviso" hidden></div>
+
+      <section class="panel">
+        <h2>1. Dados do projeto</h2>
+        <div class="grid">
+          <label class="f full">Nome do projeto / obra<input id="pNome" maxlength="80" required placeholder="Ex.: Residencial Boa Vista"></label>
+          <label class="f">Cliente<input id="pCliente" maxlength="60" placeholder="Nome ou empresa"></label>
+          <label class="f">Contato (telefone / e-mail)<input id="pContato" maxlength="60"></label>
+          <label class="f">Cidade / local<input id="pLocal" maxlength="60" placeholder="Ex.: Caruaru – PE"></label>
+          <label class="f">Tipologia<select id="pTipo"><option>Residencial unifamiliar</option><option>Residencial multifamiliar</option><option>Comercial</option><option>Industrial / galpão</option><option>Institucional</option><option>Reforma / reforço</option><option>Outro</option></select></label>
+          <label class="f">Área construída (m²)<input id="pArea" inputmode="decimal" placeholder="0"></label>
+          <label class="f">Nº de pavimentos<input id="pPav" inputmode="numeric" placeholder="0"></label>
+          <label class="f full">Descrição / escopo<input id="pDesc" maxlength="200" placeholder="Ex.: casa térrea com piscina, cobertura em laje"></label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. Disciplinas, valores e etapas</h2>
+        <div class="chips" id="pDisc"></div>
+        <div id="pDiscBox" class="view"></div>
+      </section>
+
+      <section class="panel">
+        <h2>3. Orçamento e fechamento</h2>
+        <div class="grid">
+          <label class="f">Data do orçamento<input id="oData" type="date"></label>
+          <label class="f">Validade do orçamento<input id="oValid" type="date"></label>
+          <label class="f">Valor orçado (soma das disciplinas)<input id="oOrcado" class="valor" readonly></label>
+          <label class="f">Desconto concedido (R$)<input id="oDesc" class="valor" inputmode="decimal" placeholder="0,00"></label>
+          <label class="f">Valor fechado (R$)<input id="oFechado" class="valor" readonly></label>
+          <label class="f">Data de fechamento<input id="oFechData" type="date"></label>
+          <label class="f">Início dos trabalhos<input id="oInicio" type="date"></label>
+          <label class="f">Prazo contratual (dias úteis após a entrada)<input id="oPrazoDias" type="number" min="0" max="365" placeholder="Ex.: 20"></label>
+          <label class="f">Data de entrega (calculada na liberação)<input id="oPrazo" type="date"></label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>4. Entrada e parcelamento</h2>
+        <div class="grid">
+          <label class="f">Valor de entrada (R$)<input id="eValor" class="valor" inputmode="decimal" placeholder="0,00"></label>
+          <label class="f">Data da entrada<input id="eData" type="date"></label>
+          <label class="f">Forma de pagamento<select id="eForma"><option>Pix</option><option>Transferência</option><option>Boleto</option><option>Dinheiro</option><option>Cartão</option><option>Cheque</option></select></label>
+          <label class="f">Nº de parcelas do saldo<input id="eN" type="number" min="0" max="36" value="0"></label>
+          <label class="f">Periodicidade<select id="ePer"><option value="mensal">Mensal</option><option value="quinzenal">Quinzenal</option><option value="etapa">Por etapa / entrega</option></select></label>
+          <label class="f">1º vencimento<input id="e1" type="date"></label>
+        </div>
+        <div class="calc" id="eCalc"></div>
+        <div class="bar-actions"><button type="button" class="btn sm" id="eGerar">Gerar parcelas</button><button type="button" class="btn sm" id="eAdd">+ Parcela avulsa</button></div>
+        <div id="eParc" class="pj-rows"></div>
+      </section>
+
+      <section class="panel">
+        <h2>5. Prestadores (terceirizados)</h2>
+        <p class="note">Lance a proposta do Augusto (elétrico e hidro) e, se o projeto precisou de desenhista, o valor pago a ele. Cada pagamento recebe baixa com um toque na ficha.</p>
+        <div id="prBox" class="view"></div>
+        <datalist id="dlPrest"><option value="Augusto"></option></datalist>
+        <div class="bar-actions"><button type="button" class="btn sm" id="prAdd">+ Augusto (elétrico / hidro)</button><button type="button" class="btn sm" id="prDes">+ Desenhista</button></div>
+        <div class="calc" id="prCalc"></div>
+      </section>
+
+      <section class="panel">
+        <h2>6. Situação</h2>
+        <div class="grid">
+          <label class="f full">Situação do projeto<select id="pStatus"></select></label>
+          <label class="f full">Observações<input id="pObs" maxlength="200"></label>
+        </div>
+      </section>
+
+      <div class="row-end">
+        <div class="bar-actions"><button class="btn pri" type="submit" id="salvar">Salvar projeto</button><button class="btn" type="button" id="cancelar2">Cancelar</button></div>
+        <button class="btn danger" type="button" id="excluir" hidden>Excluir projeto</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div id="toast" hidden></div>
+<script type="module" src="proj.js"></script>
+</body>
+</html>

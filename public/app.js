@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDoc, arrayUnion, arrayRemove, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { PLANO, AMB_NOME, MESES, MES3, pad, hojeISO, addMeses, addMes, diasNoMes, difDias, dm, mesCurto, brl, parseValor, fmtIn, grupoDe, ambitoDe, mesFatura, valorParcela, vencFatura, fechamentoFatura, parcelasNoMes, vencimentos, textoLembrete } from "./nucleo.js";
+import { PLANO, AMB_NOME, MESES, MES3, pad, hojeISO, addDias, addMeses, addMes, diasNoMes, difDias, dm, mesCurto, brl, parseValor, fmtIn, grupoDe, ambitoDe, mesFatura, valorParcela, vencFatura, fechamentoFatura, parcelasNoMes, vencimentos, textoLembrete } from "./nucleo.js";
 import { lerNota, sugerirPorTexto, formatarCnpj } from "./ocr.js";
 import { montarBalanco, gerarPdf } from "./balanco.js";
 

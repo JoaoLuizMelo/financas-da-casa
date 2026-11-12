@@ -1,8 +1,8 @@
 // Alicerce — balanço mensal: consolidação dos números e geração do PDF (jsPDF, no próprio aparelho, gratuito)
 import { AMB_NOME, MESES, brl, grupoDe, ambitoDe, valorParcela, dm } from "./nucleo.js";
 
-const JSPDF = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-const AUTOTABLE = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js";
+export const JSPDF = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+export const AUTOTABLE = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js";
 
 /* ===== consolidação ===== */
 export function montarBalanco({ mes, itens, nome, pessoas = {}, conjunto = false, obs = "", cartoes = [] }) {
@@ -36,12 +36,12 @@ export function montarBalanco({ mes, itens, nome, pessoas = {}, conjunto = false
 
 /* ===== PDF ===== */
 const carregados = {};
-const carregar = src => carregados[src] ??= new Promise((ok, erro) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => { delete carregados[src]; erro(new Error("Sem internet para carregar o gerador de PDF.")); }; document.head.append(s); });
+export const carregar = src => carregados[src] ??= new Promise((ok, erro) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => { delete carregados[src]; erro(new Error("Sem internet para carregar o gerador de PDF.")); }; document.head.append(s); });
 
-const COR = { petroleo: [15, 88, 104], ciano: [79, 179, 198], laranja: [240, 138, 60], grafite: [20, 38, 43], texto: [30, 42, 46], suave: [98, 117, 122], linha: [218, 226, 228], fundo: [244, 247, 247], verde: [31, 122, 82], vermelho: [178, 67, 31], amarelo: [168, 106, 0] };
+export const COR = { petroleo: [15, 88, 104], ciano: [79, 179, 198], laranja: [240, 138, 60], grafite: [20, 38, 43], texto: [30, 42, 46], suave: [98, 117, 122], linha: [218, 226, 228], fundo: [244, 247, 247], verde: [31, 122, 82], vermelho: [178, 67, 31], amarelo: [168, 106, 0] };
 const SERIES = [[42, 120, 214], [235, 104, 52], [27, 175, 122], [237, 161, 0], [232, 123, 164], [0, 131, 0], [98, 80, 214], [150, 160, 163]];
 let logoCache = null;
-async function logoPdf() {
+export async function logoPdf() {
   if (logoCache) return logoCache;
   try {
     const blob = await (await fetch(new URL("monograma.png", import.meta.url))).blob();
